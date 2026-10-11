@@ -27,3 +27,7 @@ bin-hip/
 
 # Agent tooling scratch
 .atl/
+.codegraph/
+
+# Local Node.js dependencies
+node_modules/
