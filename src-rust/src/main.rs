@@ -62,20 +62,27 @@ fn app_dir() -> PathBuf {
         .unwrap_or_default()
 }
 
+/// Icono de la ventana: `omni.ico` junto al exe → `base_dir` (datos) →
+/// embebido en el binario (siempre hay icono, aun sin ficheros en disco).
+/// Antes solo miraba `base_dir`: en instalación normal el `.ico` vive junto
+/// al exe y la ventana salía sin icono.
 fn load_window_icon(base_dir: &Path) -> Option<Icon> {
-    // Fase C (OMNI): icono nuevo con fallback al histórico durante la transición.
-    for name in ["omni.ico", "localmind.ico"] {
-        if let Ok(bytes) = std::fs::read(base_dir.join(name)) {
-            if let Ok(img) = image::load_from_memory(&bytes) {
-                let img = img.to_rgba8();
-                let (width, height) = img.dimensions();
-                if let Ok(icon) = Icon::from_rgba(img.into_raw(), width, height) {
+    for dir in [app_dir(), base_dir.to_path_buf()] {
+        for name in ["omni.ico", "localmind.ico"] {
+            if let Ok(bytes) = std::fs::read(dir.join(name)) {
+                if let Some(icon) = icon_from_bytes(&bytes) {
                     return Some(icon);
                 }
             }
         }
     }
-    None
+    icon_from_bytes(include_bytes!("../assets/omni.ico"))
+}
+
+fn icon_from_bytes(bytes: &[u8]) -> Option<Icon> {
+    let img = image::load_from_memory(bytes).ok()?.to_rgba8();
+    let (width, height) = img.dimensions();
+    Icon::from_rgba(img.into_raw(), width, height).ok()
 }
 
 /// Formatear la línea que el hook de pánico escribe en el log (D-46).

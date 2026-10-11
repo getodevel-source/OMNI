@@ -62,18 +62,36 @@ pub struct TrayHandles {
     pub item_stop: muda::MenuItem,
 }
 
-/// Icono RGBA desde `omni.png` (o `localmind.png` histórico); `None` si no
-/// hay fichero legible (la bandeja sale con icono nativo de respaldo).
+/// Icono RGBA: `omni.png` junto al exe → `base_dir` → embebido en el binario.
+/// Antes solo miraba `base_dir` y además abortaba al primer fichero ilegible
+/// (`?` dentro del loop); ahora prueba todos antes de rendirse.
 pub fn tray_icon_from_file(base_dir: &std::path::Path) -> Option<tray_icon::Icon> {
-    for name in ["omni.png", "localmind.png"] {
-        let bytes = std::fs::read(base_dir.join(name)).ok()?;
-        let img = image::load_from_memory(&bytes).ok()?.to_rgba8();
-        let (w, h) = img.dimensions();
-        if let Ok(icon) = tray_icon::Icon::from_rgba(img.into_raw(), w, h) {
-            return Some(icon);
+    let exe_dir = std::env::current_exe()
+        .ok()
+        .and_then(|e| e.parent().map(|p| p.to_path_buf()));
+    let mut dirs = Vec::new();
+    if let Some(d) = exe_dir {
+        dirs.push(d);
+    }
+    dirs.push(base_dir.to_path_buf());
+    for dir in &dirs {
+        for name in ["omni.png", "localmind.png"] {
+            if let Ok(bytes) = std::fs::read(dir.join(name)) {
+                if let Ok(img) = image::load_from_memory(&bytes) {
+                    let img = img.to_rgba8();
+                    let (w, h) = img.dimensions();
+                    if let Ok(icon) = tray_icon::Icon::from_rgba(img.into_raw(), w, h) {
+                        return Some(icon);
+                    }
+                }
+            }
         }
     }
-    None
+    let img = image::load_from_memory(include_bytes!("../assets/omni.png"))
+        .ok()?
+        .to_rgba8();
+    let (w, h) = img.dimensions();
+    tray_icon::Icon::from_rgba(img.into_raw(), w, h).ok()
 }
 
 /// Armar icono + menú de la bandeja. Best-effort: si falla (tray no
@@ -179,5 +197,20 @@ mod tests {
         // Los tests corren en el mismo proceso: dejarlo como estaba.
         let was = quit_armed();
         assert!(!was || was, "el flag existe");
+    }
+
+    /// Icono siempre disponible: aun en un dir vacío (sin .ico/.png en
+    /// disco) el embebido responde, así la ventana y la bandeja nunca salen
+    /// sin icono en instalación normal.
+    #[test]
+    fn icono_embebido_responde_sin_ficheros() {
+        let dir = std::env::temp_dir().join(format!("omni-icon-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        assert!(
+            tray_icon_from_file(&dir).is_some(),
+            "el embebido debe responder sin ficheros"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
