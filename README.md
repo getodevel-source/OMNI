@@ -1,85 +1,85 @@
-# OMNI — Tu IA local en Windows, sin terminal
+<div align="center">
+  <img src="assets/omni/omni.png" alt="Logo de OMNI" width="88" />
+  <h1>OMNI</h1>
+  <p><strong>IA local para Windows. Tus modelos corren en tu equipo.</strong></p>
+  <p>Chat, API compatible con OpenAI y agentes listos para usar, desde una sola aplicación.</p>
+  <p>
+    <a href="https://github.com/getodevel-source/OMNI/releases/latest">Descargar OMNI</a>
+    · <a href="docs/MANUAL.md">Leer el manual</a>
+    · <a href="docs/README.md">Explorar la documentación</a>
+  </p>
+  <p>
+    <a href="https://github.com/getodevel-source/OMNI/releases"><img src="https://img.shields.io/github/v/release/getodevel-source/OMNI?label=versi%C3%B3n" alt="Última versión" /></a>
+    <a href="https://github.com/getodevel-source/OMNI/actions/workflows/ci.yml"><img src="https://github.com/getodevel-source/OMNI/actions/workflows/ci.yml/badge.svg" alt="Estado de CI" /></a>
+    <img src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4" alt="Windows 10 y 11" />
+    <img src="https://img.shields.io/badge/GPU-Vulkan-6C5CE7" alt="GPU con Vulkan" />
+  </p>
+</div>
 
-[![release](https://img.shields.io/github/v/release/getodevel-source/LocalMind)](https://github.com/getodevel-source/LocalMind/releases)
-[![CI](https://github.com/getodevel-source/LocalMind/actions/workflows/ci.yml/badge.svg)](https://github.com/getodevel-source/LocalMind/actions/workflows/ci.yml)
-![Windows](https://img.shields.io/badge/Windows-10%2F11-blue)
-![GPU](https://img.shields.io/badge/GPU-Vulkan%20%2F%20AMD-green)
+<p align="center">
+  <img src="docs/ui/screens/social-preview.png" alt="Panel de OMNI con configuración del motor y telemetría" width="100%" />
+</p>
 
-Un único ejecutable que pone un modelo grande a trabajar en **tu GPU**:
-chat nativo con streaming, API compatible con OpenAI en loopback y
-lanzadores de agentes (Pi, OMP, OpenCode, DeepSeek) con todo ya configurado.
-Tus prompts no salen de tu PC. Sin terminal: todo se opera desde la app.
+OMNI ejecuta modelos GGUF en tu PC y ofrece una interfaz de escritorio para chatear, administrar modelos y conectar herramientas. El chat y la API usan el motor local; las descargas de modelos y actualizaciones necesitan Internet. El acceso desde otros equipos de la red es opcional.
 
-![Panel OMNI](docs/ui/screens/v210-panel-es.png)
+## Qué puedes hacer
 
-## Por qué OMNI
+| Área | Qué ofrece |
+|---|---|
+| **Chat y modelos** | Streaming y razonamiento visible. Importa modelos `.gguf` o evalúa si entran en la memoria de tu GPU antes de descargarlos. |
+| **API local** | Conecta clientes compatibles con OpenAI al gateway local. Incluye `/v1/chat/completions`, `/v1/responses` y `/v1/messages`. |
+| **Agentes** | Abre Pi, OMP, OpenCode o DeepSeek con el modelo, la clave y la carpeta de trabajo configurados. |
+| **Control y actualizaciones** | Consulta uso y telemetría, detén el motor cuando no lo uses y recibe actualizaciones verificadas con SHA-256 y recuperación ante fallos. |
 
-| | OMNI | Nube pública | Chat web + Docker |
-|---|---|---|---|
-| Tus datos salen de tu PC | **No** — todo en loopback | Sí | A medias |
-| Funciona sin internet | **Sí** (tras descargar el modelo) | No | Requiere imagen + terminal |
-| Hay que configurar CLIs | **No** — un clic los deja listos | N/A | A mano |
-| Actualizaciones | **Automáticas** en la app (con rollback) | — | A mano |
-| Terminal | **Nunca** | — | Siempre |
+### Chat en la aplicación
 
-## Empezar en 5 minutos
+<p align="center">
+  <img src="docs/ui/screens/v210-chat-es.png" alt="Chat de OMNI en español" width="88%" />
+</p>
 
-1. Descarga el ZIP `OMNI-portable-<versión>-<fecha>.zip` de
-   [GitHub Releases](https://github.com/getodevel-source/LocalMind/releases)
-   y extráelo donde quieras (p. ej. `C:\OMNI`), o instala con
-   `packaging/install.ps1` en `%LOCALAPPDATA%\Programs\OMNI`
-   (no requiere administrador).
-2. Copia tus `.gguf` a `models/` junto a `OMNI.exe`
-   (o impórtalos desde Ajustes → Modelos; el botón **Evaluar** te dice
-   si caben en tu GPU antes de descargar).
-3. Ejecuta `OMNI.exe`. En SmartScreen pulsa
-   «Más información → Ejecutar de todos modos» (sin firma de código).
-4. En el Panel pulsa **Arrancar** y chatea en la tab Chat.
+## Inicio rápido
 
-![Chat OMNI](docs/ui/screens/v210-chat-es.png)
+1. Descarga el ZIP portable desde [Releases](https://github.com/getodevel-source/OMNI/releases/latest) y extráelo, por ejemplo, en `C:\OMNI`.
+2. Abre `OMNI.exe`. En el primer inicio, Windows puede mostrar SmartScreen porque la aplicación aún no está firmada.
+3. En **Modelos**, importa un archivo `.gguf` o evalúa y descarga un modelo compatible. Después, vuelve al **Panel**, selecciónalo y pulsa **Iniciar Motor**.
+4. Abre **Chat** para conversar o consulta el [manual](docs/MANUAL.md) para configurar agentes, conexión en red y actualizaciones.
 
-## Lo que hace
-
-- **Chat local con razonamiento visible** — streaming, bloque *thinking*
-  colapsable, detener, copiar código. Bilingüe es/en.
-- **API OpenAI-compatible** (`/v1/chat/completions`, `/v1/messages`,
-  `/v1/responses`) con tu clave local: cualquier herramienta compatible
-  se conecta a `http://127.0.0.1:<puerto>/v1`.
-- **Agentes en un clic** — Pi, OMP, OpenCode, DeepSeek y web se abren con
-  el modelo, la clave y la carpeta de proyecto ya puestos.
-- **Telemetría en vivo** — t/s, tokens, caché, %MTP, PID; aviso si el
-  motor cargó lento y puerta de aceptación que verifica la GPU.
-- **Actualización automática** — chequeo silencioso, descarga verificada
-  por SHA256, instalación al salir con rollback `.prev` si algo falla.
-- **Cuida tu PC** — auto-stop por inactividad (libera VRAM), anti-apagón
-  (cooldown + tope de arranques), sin consola ni ventanas extra.
-
-![Conexión OMNI](docs/ui/screens/v210-conexion-es.png)
-![Ajustes OMNI](docs/ui/screens/v210-ajustes-es.png)
+Los modelos no vienen dentro del ZIP. El espacio necesario depende del modelo, su cuantización y el contexto elegido; el evaluador de la aplicación ayuda a comprobarlo antes de descargar.
 
 ## Requisitos
 
-- Windows 10/11 de 64 bits con WebView2 (lo trae Edge).
-- GPU con Vulkan (probado en AMD RX 6800 XT 16 GB); con menos VRAM usa
-  un `.gguf` más pequeño (el Evaluador te guía).
-- Puertos libres: gateway `127.0.0.1:17860` (+10 intentos) y motor
-  `llama_port` (default 8080).
+- Windows 10 u 11 de 64 bits y WebView2.
+- GPU compatible con Vulkan. El proyecto se ha probado en una AMD RX 6800 XT de 16 GB; el uso de memoria depende del modelo.
+- Una conexión a Internet para descargar la aplicación, modelos o futuras actualizaciones. Una vez descargado el modelo, el chat local puede usarse sin conexión.
 
-## Docs
+Por defecto, el gateway escucha en `127.0.0.1:17860` y el motor en el puerto configurado (8080 si está libre). La exposición a la LAN se activa desde **Conexión**.
 
-- [`docs/MANUAL.md`](docs/MANUAL.md) — manual de usuario (instalación,
-  primer arranque, actualización, datos y desinstalación; con quick start
-  en inglés).
-- [`packaging/README.md`](packaging/README.md) — layout del ZIP,
-  instalador/desinstalador, canal de auto-update, troubleshooting.
-- [`tests/README.md`](tests/README.md) — harnesses y contrato de tests.
-- [`CHANGELOG.md`](CHANGELOG.md) — cambios por versión (Keep a Changelog).
-- [`docs/SRS.md`](docs/SRS.md) — especificación del sistema.
+## Recorre el repositorio
 
-## Estado
+| Ruta | Qué contiene |
+|---|---|
+| [`src-rust/`](src-rust/) | Aplicación de escritorio, motor de procesos, API local y lógica de actualización. |
+| [`ui.html`](ui.html) | Interfaz principal que se muestra dentro de la ventana. |
+| [`assets/omni/`](assets/omni/) | Iconos y recursos de marca. |
+| [`packaging/`](packaging/) | Scripts para generar el ZIP portable e instalar o desinstalar OMNI. |
+| [`tests/`](tests/) | Pruebas de UI, integración, actualización y herramientas de rendimiento. |
+| [`.github/workflows/`](.github/workflows/) | Flujos de CI y publicación de versiones. |
+| [`docs/`](docs/) | Manuales, especificaciones, auditorías, capturas y notas técnicas. |
 
-Versión actual: ver [`src-rust/Cargo.toml`](src-rust/Cargo.toml) y
-[`CHANGELOG.md`](CHANGELOG.md). `cargo test` 212/0 + `cargo fmt` +
-`cargo clippy -D warnings`, `tests/ui-render.mjs` 97 PASS,
-`tests/smoke.mjs` 17/17 en vivo. CI en `.github/workflows/ci.yml`;
-release por tag `vX.Y.Z`.
+La guía de documentación explica por dónde empezar según tu tarea: [abrir el índice de docs](docs/README.md).
+
+## Documentación
+
+- [Manual de usuario](docs/MANUAL.md): instalación, primer inicio, modelos, actualización y datos.
+- [Empaquetado y mantenimiento](packaging/README.md): ZIP portable, instalador, canal de actualización y solución de problemas.
+- [Pruebas](tests/README.md): suites disponibles y cómo ejecutarlas.
+- [Especificación del sistema](docs/SRS.md): requisitos y contratos técnicos.
+- [Registro de cambios](CHANGELOG.md): novedades por versión.
+
+## Versiones y actualizaciones
+
+Consulta la [última versión publicada](https://github.com/getodevel-source/OMNI/releases/latest). Al crear un tag `vX.Y.Z`, GitHub Actions ejecuta las comprobaciones y construye el ZIP portable. OMNI detecta las versiones nuevas desde **Ajustes → Actualización**; los modelos y los datos del usuario se conservan durante la instalación.
+
+---
+
+<p align="center"><sub>OMNI · modelos locales, interfaz sencilla, control en tu equipo.</sub></p>

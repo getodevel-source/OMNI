@@ -6,6 +6,14 @@ Todos los cambios publicables de la app. El formato sigue
 
 ## [Unreleased]
 
+## [2.1.1] - 2026-10-11
+
+### Corregido
+- El icono de la ventana y el de la bandeja ahora también están disponibles
+  desde el binario cuando faltan los archivos de imagen junto al ejecutable.
+- La carga de iconos prueba las ubicaciones disponibles antes de usar el
+  recurso embebido como respaldo.
+
 ## [2.1.0] - 2026-10-10
 
 ### Añadido
