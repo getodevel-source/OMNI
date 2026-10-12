@@ -1968,6 +1968,269 @@
       .model-dl-row { flex-wrap: wrap; }
       .model-dl-row input:first-child { flex: 1 1 100%; }
     }
+    /* ---------- Sidebar identity, navigation, and role context ---------- */
+    .brand-logo {
+      position: relative;
+      border-color: rgba(232, 241, 215, .18);
+      background: radial-gradient(circle at 35% 28%, rgba(255,255,255,.16), rgba(255,255,255,.035) 72%);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.15), 0 8px 22px rgba(0,0,0,.18);
+    }
+    .brand-logo img { width: 32px; height: 32px; opacity: .96; }
+    .brand-section { margin-bottom: 34px; }
+    .nav-icon {
+      width: 34px;
+      height: 34px;
+      flex: 0 0 34px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid rgba(233, 241, 229, .075);
+      border-radius: 10px;
+      color: #bdc9bc;
+      background: rgba(255,255,255,.025);
+      transition: color 260ms var(--ease-ui), background 260ms var(--ease-ui), border-color 260ms var(--ease-ui), transform 260ms var(--ease-ui), box-shadow 260ms var(--ease-ui);
+    }
+    .nav-icon svg { width: 19px; height: 19px; }
+    .tab-btn { min-height: 51px; gap: 11px; border-radius: 12px; }
+    .tab-btn:hover .nav-icon {
+      color: #edf3df;
+      background: rgba(255,255,255,.07);
+      border-color: rgba(233,241,229,.13);
+      transform: scale(1.035);
+    }
+    .tab-btn.active .nav-icon {
+      color: #d8ec9d;
+      background: rgba(204,232,120,.12);
+      border-color: rgba(204,232,120,.17);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.055);
+    }
+    .tab-btn:active .nav-icon { transform: scale(.96); }
+    .role-switch-caption {
+      margin: auto 7px 8px;
+      color: #93a095;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: .11em;
+      line-height: 1.3;
+      text-transform: uppercase;
+    }
+    .role-switch { margin-top: 0; }
+    .role-btn { min-height: 44px; transition: color 220ms var(--ease-ui), background 220ms var(--ease-ui), transform 220ms var(--ease-ui); }
+    .role-btn:active { transform: scale(.97); }
+
+    /* ---------- First-run role choice ---------- */
+    #onboard-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 90;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      padding: clamp(16px, 4vw, 36px);
+      background: radial-gradient(ellipse at 72% 22%, rgba(198,217,160,.17), transparent 42%), rgba(17,25,20,.52);
+      backdrop-filter: blur(9px);
+    }
+    #onboard-overlay.is-open { display: flex; animation: onboard-overlay-in 360ms var(--ease-ui) both; }
+    @keyframes onboard-overlay-in { from { opacity: 0; } to { opacity: 1; } }
+    .onboard-dialog {
+      width: min(820px, 100%);
+      max-height: min(650px, calc(100vh - 32px));
+      max-height: min(650px, calc(100dvh - 32px));
+      padding: 5px;
+      overflow: hidden;
+      border: 1px solid rgba(37,49,39,.11);
+      border-radius: 27px;
+      background: #e6e6da;
+      box-shadow: 0 30px 86px rgba(17,27,20,.25), inset 0 1px 0 rgba(255,255,255,.9);
+      animation: onboard-dialog-in 520ms var(--ease-ui) both;
+    }
+    @keyframes onboard-dialog-in { from { opacity: 0; transform: translateY(14px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
+    .onboard-core {
+      display: grid;
+      grid-template-columns: minmax(0, .82fr) minmax(0, 1.18fr);
+      min-height: min(440px, calc(100vh - 42px));
+      min-height: min(440px, calc(100dvh - 42px));
+      max-height: calc(100vh - 42px);
+      max-height: calc(100dvh - 42px);
+      overflow-y: auto;
+      border-radius: 22px;
+      background: #fbfaf5;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.92);
+    }
+    .onboard-intro {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      padding: 36px 30px 30px;
+      background: radial-gradient(ellipse at 10% 0%, rgba(204,232,120,.18), transparent 50%), #eef0e5;
+      border-right: 1px solid rgba(42,56,41,.075);
+    }
+    .onboard-brand-mark {
+      display: grid;
+      width: 58px;
+      height: 58px;
+      place-items: center;
+      margin-bottom: 34px;
+      overflow: hidden;
+      border: 1px solid rgba(225,236,216,.16);
+      border-radius: 18px;
+      background: linear-gradient(145deg, #26382e, #151d19);
+      box-shadow: 0 12px 28px rgba(51,67,42,.13), inset 0 1px 0 rgba(255,255,255,.13);
+    }
+    .onboard-brand-mark img { width: 48px; height: 48px; object-fit: contain; mix-blend-mode: screen; }
+    .onboard-eyebrow, .onboard-options-label, .onboard-choice-kicker {
+      color: #65745e;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: .15em;
+      line-height: 1.4;
+    }
+    .onboard-title {
+      max-width: 9ch;
+      margin-top: 13px;
+      color: #26342a;
+      font-size: clamp(27px, 3vw, 34px);
+      font-weight: 650;
+      letter-spacing: -.055em;
+      line-height: 1.08;
+    }
+    .onboard-title:focus-visible { outline: 2px solid #6e8e4d; outline-offset: 3px; }
+    .onboard-sub { max-width: 30ch; margin-top: 14px; color: #57665a; font-size: 13px; line-height: 1.65; }
+    .onboard-note {
+      display: flex;
+      align-items: flex-start;
+      gap: 9px;
+      margin-top: auto;
+      padding-top: 26px;
+      color: #566452;
+      font-size: 11px;
+      line-height: 1.55;
+    }
+    .onboard-note-icon { display: inline-flex; width: 17px; height: 17px; flex: 0 0 17px; color: #72855a; }
+    .onboard-note-icon svg { width: 17px; height: 17px; }
+    .onboard-options { display: flex; flex-direction: column; min-width: 0; padding: 31px 30px 22px; }
+    .onboard-options-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+    .onboard-options-step { color: #a4ad9e; font-family: var(--font-mono); font-size: 10px; letter-spacing: .08em; }
+    .onboard-choice-list { display: grid; gap: 11px; }
+    .onboard-choice-shell {
+      display: block;
+      width: 100%;
+      padding: 4px;
+      border: 1px solid rgba(49,64,47,.105);
+      border-radius: 16px;
+      color: inherit;
+      background: #eeede5;
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+      box-shadow: 0 5px 16px rgba(38,49,35,.035), inset 0 1px 0 rgba(255,255,255,.75);
+      transition: transform 260ms var(--ease-ui), border-color 260ms var(--ease-ui), background 260ms var(--ease-ui), box-shadow 260ms var(--ease-ui);
+    }
+    .onboard-choice-shell:hover:not([aria-disabled="true"]) {
+      transform: translateY(-2px);
+      border-color: rgba(83,120,61,.30);
+      background: #e6ead9;
+      box-shadow: 0 12px 25px rgba(45,64,39,.085), inset 0 1px 0 rgba(255,255,255,.84);
+    }
+    .onboard-choice-shell:active:not([aria-disabled="true"]) { transform: scale(.99); }
+    .onboard-choice-shell:focus-visible { outline: 2px solid #6e8e4d; outline-offset: 3px; }
+    .onboard-choice-shell[aria-disabled="true"] { cursor: progress; opacity: .72; }
+    .onboard-choice-core {
+      display: grid;
+      grid-template-columns: 38px minmax(0, 1fr) 28px;
+      align-items: center;
+      gap: 12px;
+      min-height: 122px;
+      padding: 15px 14px;
+      border: 1px solid rgba(55,69,49,.06);
+      border-radius: 12px;
+      background: #fffefa;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.96);
+      transition: background 260ms var(--ease-ui), border-color 260ms var(--ease-ui);
+    }
+    .onboard-choice-shell:hover:not([aria-disabled="true"]) .onboard-choice-core { background: #fff; border-color: rgba(91,126,62,.08); }
+    .onboard-choice-icon {
+      display: grid;
+      width: 36px;
+      height: 36px;
+      place-items: center;
+      align-self: start;
+      margin-top: 2px;
+      border: 1px solid rgba(86,119,57,.14);
+      border-radius: 11px;
+      color: #4a7142;
+      background: #edf3df;
+    }
+    .onboard-choice-icon svg { width: 20px; height: 20px; }
+    .onboard-choice-icon.guest { color: #546e74; background: #edf1ef; border-color: rgba(79,108,111,.14); }
+    .onboard-choice-copy { display: flex; min-width: 0; flex-direction: column; align-items: flex-start; }
+    .onboard-choice-kicker { color: #7b8876; font-size: 8px; letter-spacing: .12em; }
+    .onboard-choice-title { margin-top: 3px; color: #29372d; font-size: 16px; font-weight: 650; letter-spacing: -.02em; }
+    .onboard-choice-desc { margin-top: 4px; color: #4f5e52; font-size: 11px; line-height: 1.5; }
+    .onboard-choice-detail { margin-top: 6px; color: #748071; font-size: 10px; line-height: 1.45; }
+    .onboard-choice-go {
+      display: grid;
+      width: 27px;
+      height: 27px;
+      place-items: center;
+      align-self: center;
+      border: 1px solid rgba(59,75,54,.08);
+      border-radius: 50%;
+      color: #53644f;
+      background: #f1f1e9;
+      transition: color 260ms var(--ease-ui), background 260ms var(--ease-ui), transform 260ms var(--ease-ui);
+    }
+    .onboard-choice-go svg { width: 15px; height: 15px; }
+    .onboard-choice-shell:hover:not([aria-disabled="true"]) .onboard-choice-go { color: #27351f; background: #d9ebad; transform: translateX(2px); }
+    .onboard-error { margin-top: 10px; padding: 9px 11px; border: 1px solid rgba(167,67,60,.18); border-radius: 10px; color: #843b35; background: #fff3ef; font-size: 11px; line-height: 1.5; }
+    .onboard-error[hidden] { display: none; }
+    .onboard-saving { margin-top: 10px; color: #566452; font-size: 11px; line-height: 1.5; }
+    .onboard-saving[hidden] { display: none; }
+    .onboard-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: auto; padding-top: 17px; }
+    .onboard-footnote { color: #758071; font-size: 10px; line-height: 1.45; }
+    .onboard-later { border: 0; padding: 6px 2px 6px 8px; color: #53614f; background: transparent; font: inherit; font-size: 11px; cursor: pointer; transition: color 220ms var(--ease-ui), transform 220ms var(--ease-ui); }
+    .onboard-later:hover { color: #26382d; transform: translateY(-1px); }
+    .onboard-later:active { transform: scale(.97); }
+    .onboard-later[aria-disabled="true"] { cursor: progress; opacity: .58; }
+    #onboard-overlay[aria-busy="true"] .onboard-options-heading { opacity: .62; }
+    @media (max-width: 760px) {
+      .brand-section { margin-bottom: 0; }
+      .nav-icon { width: 29px; height: 29px; flex-basis: 29px; border-radius: 9px; }
+      .nav-icon svg { width: 17px; height: 17px; }
+      .tab-btn { min-height: 44px; }
+      .role-switch-caption { margin: 0 7px 0 auto; letter-spacing: .07em; }
+      .role-switch { margin: 0; }
+      .onboard-dialog { width: min(620px, 100%); }
+      .onboard-core { grid-template-columns: minmax(0, 1fr); min-height: 0; }
+      .onboard-intro { padding: 24px 25px 20px; border-right: 0; border-bottom: 1px solid rgba(42,56,41,.075); }
+      .onboard-brand-mark { width: 44px; height: 44px; margin-bottom: 18px; border-radius: 14px; }
+      .onboard-brand-mark img { width: 38px; height: 38px; }
+      .onboard-title { max-width: 18ch; font-size: 28px; }
+      .onboard-sub { max-width: 48ch; margin-top: 9px; }
+      .onboard-note { padding-top: 14px; }
+      .onboard-options { padding: 20px 25px 18px; }
+      .onboard-choice-core { min-height: 106px; }
+    }
+    @media (max-width: 480px) {
+      .brand-logo img { width: 27px; height: 27px; }
+      .nav-icon { width: 28px; height: 28px; flex-basis: 28px; }
+      .tab-btn { min-height: 44px; }
+      #onboard-overlay { align-items: flex-start; padding: 12px; }
+      .onboard-dialog { max-height: calc(100vh - 24px); max-height: calc(100dvh - 24px); border-radius: 22px; }
+      .onboard-core { max-height: calc(100vh - 34px); max-height: calc(100dvh - 34px); border-radius: 17px; }
+      .onboard-intro { padding: 20px 18px 16px; }
+      .onboard-options { padding: 17px 16px 14px; }
+      .onboard-choice-core { grid-template-columns: 32px minmax(0, 1fr) 25px; gap: 9px; min-height: 0; padding: 12px 10px; }
+      .onboard-choice-icon { width: 31px; height: 31px; border-radius: 9px; }
+      .onboard-choice-icon svg { width: 18px; height: 18px; }
+      .onboard-choice-title { font-size: 15px; }
+      .onboard-choice-desc { font-size: 10px; }
+      .onboard-choice-detail { font-size: 9px; }
+      .onboard-footer { align-items: flex-start; }
+      .onboard-footnote { max-width: 22ch; }
+    }
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
     }
@@ -1989,24 +2252,25 @@
 
     <nav class="tabs-nav" data-i18n-aria="nav.label" aria-label="Navegación principal" aria-orientation="vertical" id="main-nav" role="tablist">
       <button class="tab-btn active" data-tab="dashboard" onclick="switchTab('dashboard')" id="nav-dashboard" role="tab" aria-selected="true" aria-controls="tab-dashboard" tabindex="0" onkeydown="onNavKey(event)">
-        <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></svg></span>
+        <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"><rect x="3.75" y="3.75" width="16.5" height="16.5" rx="3"/><path d="M12 4v16M4 12h16"/></svg></span>
         <span data-i18n="nav.panel">Panel</span>
       </button>
       <button class="tab-btn" data-tab="chat" onclick="switchTab('chat')" id="nav-chat" role="tab" aria-selected="false" aria-controls="tab-chat" tabindex="-1" onkeydown="onNavKey(event)">
-        <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11.4a7.4 7.4 0 0 1-7.8 7.4 8 8 0 0 1-3.2-.7L4 20l1.5-4.2A7.4 7.4 0 1 1 20 11.4Z"/><path d="M8.5 11.5h.01M12 11.5h.01M15.5 11.5h.01" stroke-width="2.2"/></svg></span>
+        <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"><path d="M19.4 11.1a7.4 7.4 0 0 1-7.4 7.4 7.7 7.7 0 0 1-3.2-.7L4 19.4l1.6-4.1A7.3 7.3 0 1 1 19.4 11.1Z"/><path d="M8.6 11.2h.01M12 11.2h.01M15.4 11.2h.01" stroke-width="2"/></svg></span>
         <span data-i18n="nav.chat">Chat</span>
       </button>
       <button class="tab-btn" data-tab="conexion" onclick="switchTab('conexion')" id="nav-conexion" role="tab" aria-selected="false" aria-controls="tab-conexion" tabindex="-1" onkeydown="onNavKey(event)">
-        <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="m8.2 7.3 2.5 8M15.8 7.3l-2.5 8M8.5 6h7"/></svg></span>
+        <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="6" r="2"/><circle cx="19" cy="6" r="2"/><circle cx="12" cy="18" r="2"/><path d="M7 6h10M6.3 7.8l4.5 8M17.7 7.8l-4.5 8"/></svg></span>
         <span data-i18n="nav.conexion">Conexión</span>
       </button>
       <button class="tab-btn" data-tab="settings" onclick="switchTab('settings')" id="nav-settings" role="tab" aria-selected="false" aria-controls="tab-settings" tabindex="-1" onkeydown="onNavKey(event)">
-        <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8.2a3.8 3.8 0 1 0 0 7.6 3.8 3.8 0 0 0 0-7.6Z"/><path d="m19.4 13.5 1.1.8-1.3 2.3-1.3-.5a7.7 7.7 0 0 1-1.4.8l-.2 1.4h-2.7l-.3-1.4a7.7 7.7 0 0 1-1.5-.8l-1.2.5-1.4-2.3 1.1-.9a7.1 7.1 0 0 1 0-1.7l-1.1-.8 1.4-2.3 1.2.5a7.7 7.7 0 0 1 1.5-.8l.3-1.4h2.7l.2 1.4a7.7 7.7 0 0 1 1.4.8l1.3-.5 1.3 2.3-1.1.8a7.1 7.1 0 0 1 0 1.8Z" transform="translate(-1.5 0)"/></svg></span>
+        <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h5m4 0h7M4 12h9m4 0h3M4 18h3m4 0h9"/><circle cx="11" cy="6" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="9" cy="18" r="2"/></svg></span>
         <span data-i18n="nav.settings">Ajustes</span>
       </button>
     </nav>
 
-    <div class="role-switch" role="group" data-i18n-aria="settings.roleGroup" aria-label="Rol">
+    <div class="role-switch-caption" id="role-switch-caption" data-i18n="nav.roleCaption">Rol de esta PC</div>
+    <div class="role-switch" role="group" aria-labelledby="role-switch-caption">
       <button class="role-btn active" type="button" id="hs-oraculo" onclick="setRole('oraculo')" aria-pressed="true"><span data-i18n="settings.roleOraculo">Oráculo</span></button>
       <button class="role-btn" type="button" id="hs-guest" onclick="setRole('guest')" aria-pressed="false"><span data-i18n="settings.roleGuest">Guest</span></button>
     </div>
@@ -2039,10 +2303,10 @@
 
   <!-- Unlock overlay (Fase B4): la UI en red llega sin cookie; con 401 pide
        la clave del Servidor y la canjea por sesión vía POST /api/unlock. -->
-  <div id="unlock-overlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,.72); z-index: 100; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box;">
+  <div id="unlock-overlay" role="dialog" aria-modal="true" aria-labelledby="unlock-dialog-title" aria-hidden="true" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,.72); z-index: 100; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box;">
     <div class="card" style="max-width: min(360px, 100%); margin: 0; width: 100%;">
       <div class="card-header">
-        <span class="card-title" data-i18n="unlock.title">Desbloquear</span>
+        <span class="card-title" id="unlock-dialog-title" data-i18n="unlock.title">Desbloquear</span>
       </div>
       <div class="card-body">
         <div class="profile-hint" data-i18n="unlock.sub">Esta UI está en red: ingresa la clave del Servidor.</div>
@@ -2058,26 +2322,57 @@
 
   <!-- Onboarding de rol (Fase UX): primer arranque pregunta Oráculo/Guest. -->
   <!-- "Decidir después" conserva el rol vigente y deja un aviso persistente en Conexión. -->
-  <div id="onboard-overlay" role="dialog" aria-modal="true" aria-labelledby="onboard-title" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,.8); z-index: 90; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box;">
-    <div class="card" style="max-width: min(460px, 100%); margin: 0; width: 100%;">
-      <div class="card-header">
-        <span class="card-title" id="onboard-title" data-i18n="onboard.title">Elige el rol de esta PC</span>
-      </div>
-      <div class="card-body">
-        <div class="profile-hint" data-i18n="onboard.sub">Puedes cambiarlo cuando quieras desde el encabezado o Conexión.</div>
-        <div class="fields-row cfg-2col" style="margin-top: 8px;">
-          <div class="field-group">
-            <button class="btn btn-primary" type="button" id="onboard-oraculo" style="width: 100%;" onclick="chooseRole('oraculo')"><span data-i18n="settings.roleOraculo">Oráculo</span></button>
-            <div class="profile-hint" data-i18n="settings.roleOraculoDesc">Tiene el modelo: computa, sirve y usa en esta PC.</div>
+  <div id="onboard-overlay" role="dialog" aria-modal="true" aria-labelledby="onboard-title" aria-hidden="true">
+    <div class="onboard-dialog">
+      <div class="onboard-core">
+        <section class="onboard-intro">
+          <div class="onboard-brand-mark" aria-hidden="true"><img src="omni.png" alt="" width="46" height="46"></div>
+          <div class="onboard-eyebrow" data-i18n="onboard.eyebrow">CONFIGURACIÓN INICIAL</div>
+          <h1 class="onboard-title" id="onboard-title" tabindex="-1" data-i18n="onboard.title">¿Dónde vive tu modelo?</h1>
+          <p class="onboard-sub" data-i18n="onboard.sub">Elige dónde está instalado el modelo que vas a usar con OMNI.</p>
+          <div class="onboard-note">
+            <span class="onboard-note-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5M12 8h.01"/></svg></span>
+            <span data-i18n="onboard.note">Podrás cambiar esta opción más adelante en Conexión.</span>
           </div>
-          <div class="field-group">
-            <button class="tool-btn" type="button" id="onboard-guest" style="width: 100%;" onclick="chooseRole('guest')"><span data-i18n="settings.roleGuest">Guest</span></button>
-            <div class="profile-hint" data-i18n="settings.roleGuestDesc">Sin modelo: chatea y lanza CLIs contra el Oráculo.</div>
+        </section>
+        <section class="onboard-options" data-i18n-aria="onboard.optionsLabel" aria-label="Opciones de rol">
+          <div class="onboard-options-heading">
+            <span class="onboard-options-label" data-i18n="onboard.chooseLabel">ELIGE UNA OPCIÓN</span>
+            <span class="onboard-options-step" aria-hidden="true">01</span>
           </div>
-        </div>
-        <div style="margin-top: 8px; text-align: center;">
-          <button class="tool-btn" type="button" id="onboard-later" onclick="laterRole()"><span data-i18n="onboard.later">Decidir después</span></button>
-        </div>
+          <div class="onboard-choice-list">
+            <button class="onboard-choice-shell" type="button" id="onboard-oraculo" onclick="chooseRole('oraculo')">
+              <span class="onboard-choice-core">
+                <span class="onboard-choice-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M8 9h8M8 12h5M8 15h3"/><circle cx="17" cy="15" r="1"/></svg></span>
+                <span class="onboard-choice-copy">
+                  <span class="onboard-choice-kicker" data-i18n="onboard.oracleKicker">EL MODELO ESTÁ AQUÍ</span>
+                  <strong class="onboard-choice-title" data-i18n="settings.roleOraculo">Oráculo</strong>
+                  <span class="onboard-choice-desc" id="onboard-oraculo-desc" data-i18n="onboard.oracleDesc">Esta PC ejecuta el modelo y puede compartirlo con otros equipos.</span>
+                  <span class="onboard-choice-detail" data-i18n="onboard.oracleDetail">El servidor de red se activa al reiniciar OMNI.</span>
+                </span>
+                <span class="onboard-choice-go" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M13 6l6 6-6 6"/></svg></span>
+              </span>
+            </button>
+            <button class="onboard-choice-shell" type="button" id="onboard-guest" onclick="chooseRole('guest')">
+              <span class="onboard-choice-core">
+                <span class="onboard-choice-icon guest" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="12" height="10" rx="2.5"/><path d="M7 18.5h5M9.5 15v3.5M16 9h2.5a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H16"/><path d="m18 12 2.5-1.5"/></svg></span>
+                <span class="onboard-choice-copy">
+                  <span class="onboard-choice-kicker" data-i18n="onboard.guestKicker">EL MODELO ESTÁ EN OTRA PC</span>
+                  <strong class="onboard-choice-title" data-i18n="settings.roleGuest">Guest</strong>
+                  <span class="onboard-choice-desc" id="onboard-guest-desc" data-i18n="onboard.guestDesc">OMNI se conecta al servidor Oráculo de otro equipo.</span>
+                  <span class="onboard-choice-detail" data-i18n="onboard.guestDetail">Necesitarás su dirección y clave en Conexión.</span>
+                </span>
+                <span class="onboard-choice-go" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M13 6l6 6-6 6"/></svg></span>
+              </span>
+            </button>
+          </div>
+          <div id="onboard-error" class="onboard-error" role="alert" tabindex="-1" hidden></div>
+          <div id="onboard-saving" class="onboard-saving" role="status" aria-live="polite" tabindex="-1" hidden data-i18n="onboard.saving">Guardando la elección…</div>
+          <div class="onboard-footer">
+            <span class="onboard-footnote" data-i18n="onboard.footer">La elección se puede cambiar después.</span>
+            <button class="onboard-later" type="button" id="onboard-later" onclick="laterRole()"><span data-i18n="onboard.later">Decidir después</span></button>
+          </div>
+        </section>
       </div>
     </div>
   </div>
@@ -2803,6 +3098,7 @@
         'nav.usage': 'Uso', 'nav.logs': 'Logs', 'nav.specs': 'Specs',
         'nav.conexion': 'Conexión',
         'nav.settings': 'Ajustes',
+        'nav.roleCaption': 'Rol de esta PC',
         'conexion.title': 'Conexión',
         'conexion.sub': 'Modo de esta PC, red local y uso del gateway.',
         'lang.label': 'Idioma',
@@ -3058,15 +3354,28 @@
         'settings.saved': 'Guardado',
         'settings.roleTitle': 'Rol: qué es esta PC',
         'settings.roleOraculo': 'Oráculo',
-        'settings.roleOraculoDesc': 'Tiene el modelo: computa, sirve y usa en esta PC.',
+        'settings.roleOraculoDesc': 'Esta PC ejecuta el modelo y puede ofrecerlo a otros equipos.',
         'settings.roleGuest': 'Guest',
-        'settings.roleGuestDesc': 'Sin modelo: chatea y lanza CLIs contra el Oráculo.',
+        'settings.roleGuestDesc': 'Esta PC se conecta al modelo de otro Oráculo.',
         'settings.roleRestart': 'Exponer en LAN rige al reiniciar la app.',
         'settings.roleGroup': 'Rol',
         'settings.lanExposed': 'Exponer en la LAN',
         'settings.lanPlainWarn': 'La LAN va en HTTP sin cifrar: clave y prompts visibles en tu red. Solo en redes de confianza.',
-        'onboard.title': 'Elige el rol de esta PC',
-        'onboard.sub': 'Puedes cambiarlo cuando quieras desde el encabezado o Conexión.',
+        'onboard.eyebrow': 'CONFIGURACIÓN INICIAL',
+        'onboard.title': '¿Dónde vive tu modelo?',
+        'onboard.sub': 'Elige dónde está instalado el modelo que vas a usar con OMNI.',
+        'onboard.note': 'Puedes cambiar el rol después desde Conexión.',
+        'onboard.optionsLabel': 'Opciones de rol',
+        'onboard.chooseLabel': 'ELIGE UNA OPCIÓN',
+        'onboard.oracleKicker': 'EL MODELO ESTÁ AQUÍ',
+        'onboard.oracleDesc': 'Esta PC ejecuta el modelo y puede compartirlo con otros equipos.',
+        'onboard.oracleDetail': 'El servidor de red se activa al reiniciar OMNI.',
+        'onboard.guestKicker': 'EL MODELO ESTÁ EN OTRA PC',
+        'onboard.guestDesc': 'OMNI se conecta al servidor Oráculo de otro equipo.',
+        'onboard.guestDetail': 'Necesitarás su dirección y clave en Conexión.',
+        'onboard.footer': 'La elección se guarda en esta PC.',
+        'onboard.saveError': 'No se pudo guardar el rol. Inténtalo de nuevo.',
+        'onboard.saving': 'Guardando la elección…',
         'onboard.later': 'Decidir después',
         'onboard.deferredHint': 'Aún no elegiste el rol de esta PC: Oráculo (tiene el modelo) o Guest (usa el de otro). Cámbialo aquí cuando quieras.',
         'settings.serverIps': 'Esta PC en la LAN',
@@ -3122,6 +3431,7 @@
         'nav.usage': 'Usage', 'nav.logs': 'Logs', 'nav.specs': 'Specs',
         'nav.conexion': 'Connect',
         'nav.settings': 'Settings',
+        'nav.roleCaption': 'THIS PC ROLE',
         'conexion.title': 'Connection',
         'conexion.sub': 'This PC mode, local network and gateway usage.',
         'lang.label': 'Language',
@@ -3376,15 +3686,28 @@
         'settings.saved': 'Saved',
         'settings.roleTitle': 'Role: what this PC is',
         'settings.roleOraculo': 'Oráculo',
-        'settings.roleOraculoDesc': 'Holds the model: computes, serves and uses on this PC.',
+        'settings.roleOraculoDesc': 'This PC runs the model and can offer it to other devices.',
         'settings.roleGuest': 'Guest',
-        'settings.roleGuestDesc': 'No model: chats and launches CLIs against the Oráculo.',
+        'settings.roleGuestDesc': 'This PC connects to another Oráculo’s model.',
         'settings.roleRestart': 'LAN exposure applies after restarting the app.',
         'settings.roleGroup': 'Role',
         'settings.lanExposed': 'Expose on LAN',
         'settings.lanPlainWarn': 'LAN is plain HTTP: key and prompts are visible on your network. Trusted networks only.',
-        'onboard.title': 'Choose this PC role',
-        'onboard.sub': 'You can change it anytime from the header or Connection.',
+        'onboard.eyebrow': 'INITIAL SETUP',
+        'onboard.title': 'Where does your model live?',
+        'onboard.sub': 'Choose where the model you want to use with OMNI is installed.',
+        'onboard.note': 'You can change this role later in Connection.',
+        'onboard.optionsLabel': 'Role options',
+        'onboard.chooseLabel': 'CHOOSE AN OPTION',
+        'onboard.oracleKicker': 'THE MODEL IS ON THIS PC',
+        'onboard.oracleDesc': 'This PC runs the model and can share it with other devices.',
+        'onboard.oracleDetail': 'The network server starts after you restart OMNI.',
+        'onboard.guestKicker': 'THE MODEL IS ON ANOTHER PC',
+        'onboard.guestDesc': 'OMNI connects to the Oráculo server on another device.',
+        'onboard.guestDetail': 'You’ll need its address and key in Connection.',
+        'onboard.footer': 'Your choice is saved on this PC.',
+        'onboard.saveError': 'Could not save this role. Please try again.',
+        'onboard.saving': 'Saving your choice…',
         'onboard.later': 'Decide later',
         'onboard.deferredHint': 'You have not chosen this PC role yet: Oráculo (holds the model) or Guest (uses someone else\u2019s). Change it here anytime.',
         'settings.serverIps': 'This PC on the LAN',
@@ -4122,21 +4445,23 @@
         }
         return null;
       },
-      async getAppConfig() {
+      async getAppConfig(signal) {
         try {
-          const res = await fetch('/api/config');
+          const res = await fetch('/api/config', signal ? { signal } : undefined);
           if (res.status === 404 || res.status === 501) return { missing: true };
           if (res.ok) return await res.json();
         } catch (e) {
           return { missing: true };
         }
       },
-      async postAppConfig(body) {
-        const res = await fetch('/api/config', {
+      async postAppConfig(body, signal) {
+        const options = {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body)
-        });
+        };
+        if (signal) options.signal = signal;
+        const res = await fetch('/api/config', options);
         let data = null;
         try { data = await res.json(); } catch (e) { data = null; }
         return { status: res.status, ok: res.ok, data };
@@ -4604,6 +4929,14 @@
 
     function refreshRoleCard(cfg) {
       const role = roleFromCfg(cfg);
+      refreshRoleCardForRole(role);
+      const lanCk = document.getElementById('cfg-lan-enabled');
+      if (lanCk && cfg && cfg.lan) lanCk.checked = !!cfg.lan.enabled;
+      const url = document.getElementById('cfg-remote-url');
+      if (url && cfg && cfg.remote && typeof cfg.remote.url === 'string' && !url.value) url.value = cfg.remote.url;
+    }
+
+    function refreshRoleCardForRole(role) {
       cfgRoleCache = role;
       const meta = document.getElementById('cfg-role-meta');
       if (meta) meta.textContent = roleLabel(role);
@@ -4613,11 +4946,9 @@
       }
       syncRoleSwitcher(role);
       const lanCk = document.getElementById('cfg-lan-enabled');
-      if (lanCk && cfg && cfg.lan) lanCk.checked = !!cfg.lan.enabled;
+      if (lanCk && role === 'oraculo') lanCk.checked = true;
       cfgShow(document.getElementById('cfg-server-panel'), role === 'oraculo');
       cfgShow(document.getElementById('cfg-client-panel'), role === 'guest');
-      const url = document.getElementById('cfg-remote-url');
-      if (url && cfg && cfg.remote && typeof cfg.remote.url === 'string' && !url.value) url.value = cfg.remote.url;
       if (role === 'oraculo') refreshLanPanel();
       try { renderChatWelcome(); } catch (e) {}
     }
@@ -4640,6 +4971,38 @@
     const ROLE_SEEN_KEY = 'omni_role_seen';
     const ROLE_DEFERRED_KEY = 'omni_role_deferred';
     let onboardPrevFocus = null;
+    let modalInertSnapshot = null;
+    function syncModalInert() {
+      if (!document.body) return;
+      const onboard = document.getElementById('onboard-overlay');
+      const unlock = document.getElementById('unlock-overlay');
+      const top = unlockIsOpen() ? unlock : (onboard && onboard.classList.contains('is-open') ? onboard : null);
+      const children = Array.from(document.body.children);
+      if (!top) {
+        if (modalInertSnapshot) modalInertSnapshot.forEach((wasInert, el) => { try { el.inert = wasInert; } catch (e) {} });
+        modalInertSnapshot = null;
+        return;
+      }
+      if (!modalInertSnapshot) modalInertSnapshot = new Map(children.map(el => [el, !!el.inert]));
+      children.forEach(el => {
+        if (el.id === 'toast-region' || el === top) {
+          try { el.inert = modalInertSnapshot.has(el) ? modalInertSnapshot.get(el) : false; } catch (e) {}
+        } else {
+          try { el.inert = true; } catch (e) {}
+        }
+      });
+    }
+    function setOnboardBackgroundInert(inert) {
+      syncModalInert();
+    }
+    function onboardFocusable() {
+      const ov = document.getElementById('onboard-overlay');
+      if (!ov) return [];
+      const selector = 'a[href], area[href], button:not(:disabled):not([aria-disabled="true"]), input:not(:disabled):not([type="hidden"]), select:not(:disabled), textarea:not(:disabled), [contenteditable="true"], [tabindex]:not([tabindex="-1"]):not([aria-disabled="true"])';
+      return Array.from(ov.querySelectorAll(selector)).filter(el =>
+        !el.hidden && el.getAttribute('aria-hidden') !== 'true' && el.getClientRects().length > 0
+      );
+    }
     function roleSeen() {
       try { return localStorage.getItem(ROLE_SEEN_KEY) === '1'; } catch (e) { return true; }
     }
@@ -4650,54 +5013,145 @@
       try { localStorage.setItem(ROLE_SEEN_KEY, '1'); } catch (e) {}
       try { localStorage.removeItem(ROLE_DEFERRED_KEY); } catch (e) {}
       const ov = document.getElementById('onboard-overlay');
-      if (ov) ov.style.display = 'none';
-      try { renderRoleDeferredHint(); } catch (e) {}
-      if (onboardPrevFocus && onboardPrevFocus.focus) {
-        try { onboardPrevFocus.focus(); } catch (e) {}
-        onboardPrevFocus = null;
+      if (ov) {
+        ov.classList.remove('is-open');
+        ov.setAttribute('aria-hidden', 'true');
+        ov.removeAttribute('aria-busy');
       }
+      setOnboardBackgroundInert(false);
+      try { renderRoleDeferredHint(); } catch (e) {}
+      restoreOnboardFocus();
+    }
+    function restoreOnboardFocus() {
+      const target = (onboardPrevFocus && onboardPrevFocus !== document.body && document.contains(onboardPrevFocus) && onboardPrevFocus.focus)
+        ? onboardPrevFocus : document.getElementById('nav-dashboard');
+      if (target && target.focus) { try { target.focus(); } catch (e) {} }
+      onboardPrevFocus = null;
     }
     function maybeOnboard() {
       if (roleSeen()) { try { renderRoleDeferredHint(); } catch (e) {} return; }
       const ov = document.getElementById('onboard-overlay');
-      if (!ov) return;
+      if (!ov || ov.classList.contains('is-open')) return;
       try { onboardPrevFocus = document.activeElement || null; } catch (e) { onboardPrevFocus = null; }
-      ov.style.display = 'flex';
-      // P0 producción: foco inicial dentro del diálogo para lector de pantalla.
+      ov.classList.add('is-open');
+      const unlockOpen = unlockIsOpen();
+      ov.setAttribute('aria-hidden', unlockOpen ? 'true' : 'false');
+      ov.inert = unlockOpen;
+      setOnboardBackgroundInert(true);
       const first = document.getElementById('onboard-oraculo');
-      if (first && first.focus) { try { first.focus(); } catch (e) {} }
+      if (!unlockOpen && first && first.focus) { try { first.focus(); } catch (e) {} }
     }
     // P0 producción: trampa de foco + Esc dentro del diálogo de rol.
     function onboardTrapKey(ev) {
+      if (unlockIsOpen()) {
+        if (!ev || ev.key !== 'Tab') return;
+        const unlock = document.getElementById('unlock-overlay');
+        const els = unlock ? Array.from(unlock.querySelectorAll('input:not(:disabled), button:not(:disabled), [tabindex]:not([tabindex="-1"])')).filter(el => el.getClientRects().length > 0) : [];
+        if (!els.length) { ev.preventDefault(); return; }
+        const first = els[0];
+        const last = els[els.length - 1];
+        if (!unlock.contains(document.activeElement)) { ev.preventDefault(); (ev.shiftKey ? last : first).focus(); }
+        else if (ev.shiftKey && document.activeElement === first) { ev.preventDefault(); last.focus(); }
+        else if (!ev.shiftKey && document.activeElement === last) { ev.preventDefault(); first.focus(); }
+        return;
+      }
       const ov = document.getElementById('onboard-overlay');
-      if (!ov || ov.style.display === 'none') return;
-      if (ev && ev.key === 'Escape') { laterRole(); return; }
+      if (!ov || !ov.classList.contains('is-open')) return;
+      if (ev && ev.key === 'Escape') {
+        if (ov.getAttribute('aria-busy') === 'true') { ev.preventDefault(); return; }
+        laterRole(); return;
+      }
       if (!ev || ev.key !== 'Tab') return;
-      const ids = ['onboard-oraculo', 'onboard-guest', 'onboard-later'];
-      const els = ids.map(id => document.getElementById(id)).filter(Boolean);
-      if (!els.length) return;
+      const els = onboardFocusable();
+      if (!els.length) { ev.preventDefault(); return; }
       const first = els[0];
       const last = els[els.length - 1];
-      if (ev.shiftKey && document.activeElement === first) { ev.preventDefault(); last.focus(); }
+      if (!ov.contains(document.activeElement)) {
+        ev.preventDefault();
+        (ev.shiftKey ? last : first).focus();
+      } else if (ev.shiftKey && document.activeElement === first) { ev.preventDefault(); last.focus(); }
       else if (!ev.shiftKey && document.activeElement === last) { ev.preventDefault(); first.focus(); }
     }
     try {
       if (document.addEventListener) document.addEventListener('keydown', onboardTrapKey);
+      document.addEventListener('focusin', ev => {
+        if (unlockIsOpen()) {
+          const unlock = document.getElementById('unlock-overlay');
+          if (unlock && !unlock.contains(ev.target)) {
+            const input = document.getElementById('unlock-key');
+            if (input && input.focus) { try { input.focus(); } catch (e) {} }
+          }
+          return;
+        }
+        const ov = document.getElementById('onboard-overlay');
+        if (!ov || !ov.classList.contains('is-open') || ov.contains(ev.target)) return;
+        const first = onboardFocusable()[0];
+        if (first && first.focus) { try { first.focus(); } catch (e) {} }
+      });
     } catch (e) {}
     async function chooseRole(role) {
-      markRoleSeen();
-      await setRole(role);
+      const ov = document.getElementById('onboard-overlay');
+      if (ov && ov.getAttribute('aria-busy') === 'true') return;
+      const error = document.getElementById('onboard-error');
+      const saving = document.getElementById('onboard-saving');
+      const later = document.getElementById('onboard-later');
+      const choices = ['onboard-oraculo', 'onboard-guest'].map(id => document.getElementById(id)).filter(Boolean);
+      if (error) { error.hidden = true; error.textContent = ''; }
+      if (saving) { saving.textContent = T('onboard.saving'); saving.hidden = false; }
+      if (ov) ov.setAttribute('aria-busy', 'true');
+      choices.forEach(el => { el.setAttribute('aria-disabled', 'true'); });
+      if (later) later.setAttribute('aria-disabled', 'true');
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
+      try {
+        const saved = await setRole(role, controller.signal);
+        if (saved) { markRoleSeen(); return; }
+        if (await reconcileRoleAfterSaveFailure(role)) { markRoleSeen(); return; }
+        if (ov) ov.removeAttribute('aria-busy');
+        const message = T('onboard.saveError');
+        if (error) { error.textContent = message; error.hidden = false; }
+        if (error && error.focus) { try { error.focus(); } catch (e) {} }
+      } catch (e) {
+        if (ov) ov.removeAttribute('aria-busy');
+        if (error) { error.textContent = T('onboard.saveError'); error.hidden = false; }
+        if (error && error.focus) { try { error.focus(); } catch (e) {} }
+      } finally {
+        clearTimeout(timeout);
+        if (saving) saving.hidden = true;
+        if (ov && ov.classList.contains('is-open')) ov.removeAttribute('aria-busy');
+        choices.forEach(el => { el.removeAttribute('aria-disabled'); });
+        if (later) later.removeAttribute('aria-disabled');
+      }
+    }
+    async function reconcileRoleAfterSaveFailure(requestedRole) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
+      try {
+        const cfg = await api.getAppConfig(controller.signal);
+        if (!cfg || cfg.missing) return false;
+        refreshRoleCard(cfg);
+        if (requestedRole === 'guest') return !!(cfg.client && cfg.client.enabled === true);
+        return !!(cfg.lan && cfg.lan.enabled === true) && !(cfg.client && cfg.client.enabled === true);
+      } catch (e) {
+        return false;
+      } finally {
+        clearTimeout(timeout);
+      }
     }
     function laterRole() {
+      const currentOverlay = document.getElementById('onboard-overlay');
+      if (currentOverlay && currentOverlay.getAttribute('aria-busy') === 'true') return;
       try { localStorage.setItem(ROLE_SEEN_KEY, '1'); } catch (e) {}
       try { localStorage.setItem(ROLE_DEFERRED_KEY, '1'); } catch (e) {}
       const ov = document.getElementById('onboard-overlay');
-      if (ov) ov.style.display = 'none';
-      try { renderRoleDeferredHint(); } catch (e) {}
-      if (onboardPrevFocus && onboardPrevFocus.focus) {
-        try { onboardPrevFocus.focus(); } catch (e) {}
-        onboardPrevFocus = null;
+      if (ov) {
+        ov.classList.remove('is-open');
+        ov.setAttribute('aria-hidden', 'true');
+        ov.removeAttribute('aria-busy');
       }
+      setOnboardBackgroundInert(false);
+      try { renderRoleDeferredHint(); } catch (e) {}
+      restoreOnboardFocus();
     }
     // P0 producción: hint persistente en Conexión cuando se pospone el rol.
     function renderRoleDeferredHint() {
@@ -4711,24 +5165,36 @@
         hint.textContent = '';
       }
     }
-    async function setRole(role) {
+    async function setRole(role, signal) {
       cfgInlineError('cfg-role-error', null);
       // Oráculo: sale de cliente y enciende LAN (consentimiento explícito al
       // elegir el rol; rige al reiniciar). Guest: entra en cliente.
       const body = role === 'guest' ? { client: { enabled: true } }
         : { lan: { enabled: true }, client: { enabled: false } };
       try {
-        const res = await api.postAppConfig(body);
+        const res = await api.postAppConfig(body, signal);
         if (res && res.ok) {
           cfgFlashOk('cfg-role-ok');
           if (role === 'oraculo') toast(T('settings.roleRestart'));
-          const cfg = (res.data && !res.data.missing) ? res.data : await api.getAppConfig();
-          if (cfg && !cfg.missing) refreshRoleCard(cfg);
-          return;
+          const cfg = (res.data && !res.data.missing) ? res.data : null;
+          if (cfg) refreshRoleCard(cfg);
+          else {
+            refreshRoleCardForRole(role);
+            try {
+              const next = await api.getAppConfig(signal);
+              if (next && !next.missing) refreshRoleCard(next);
+              else cfgInlineError('cfg-role-error', T('models.dlError'));
+            } catch (e) {
+              cfgInlineError('cfg-role-error', T('models.dlError'));
+            }
+          }
+          return true;
         }
         cfgInlineError('cfg-role-error', cfgErrText(res, 'models.dlError'));
+        return false;
       } catch (e) {
         cfgInlineError('cfg-role-error', (e && e.message) ? e.message : T('models.dlError'));
+        return false;
       }
     }
 
@@ -5132,14 +5598,49 @@
     /* ---------- Unlock (Fase B4): la UI en red llega sin cookie de sesión.
        Si /api/status da 401, se muestra el overlay una vez; el desbloqueo
        canjea la clave por cookie vía POST /api/unlock y refresca. */
+    function unlockIsOpen() {
+      const ov = document.getElementById('unlock-overlay');
+      return !!(ov && ov.style.display !== 'none' && getComputedStyle(ov).display !== 'none');
+    }
+    let unlockPrevFocus = null;
+    function setUnlockVisible(visible) {
+      const unlock = document.getElementById('unlock-overlay');
+      if (!unlock) return;
+      const wasOpen = unlockIsOpen();
+      if (visible && !wasOpen) { try { unlockPrevFocus = document.activeElement || null; } catch (e) { unlockPrevFocus = null; } }
+      if (!visible && !wasOpen) return;
+      unlock.style.display = visible ? 'flex' : 'none';
+      unlock.setAttribute('aria-hidden', visible ? 'false' : 'true');
+      const onboarding = document.getElementById('onboard-overlay');
+      if (onboarding && onboarding.classList.contains('is-open')) {
+        onboarding.setAttribute('aria-hidden', visible ? 'true' : 'false');
+      }
+      syncModalInert();
+      if (visible) {
+        const input = document.getElementById('unlock-key');
+        if (input && input.focus) { try { input.focus(); } catch (e) {} }
+      } else if (onboarding && onboarding.classList.contains('is-open')) {
+        if (onboarding.getAttribute('aria-busy') === 'true') { unlockPrevFocus = null; return; }
+        const previous = unlockPrevFocus && onboarding.contains(unlockPrevFocus)
+          && unlockPrevFocus.getAttribute('aria-disabled') !== 'true' ? unlockPrevFocus : null;
+        const target = previous || onboardFocusable()[0];
+        if (target && target.focus) { try { target.focus(); } catch (e) {} }
+        unlockPrevFocus = null;
+      } else {
+        const previous = unlockPrevFocus;
+        const canRestore = previous && previous !== document.body && document.contains(previous)
+          && previous.getAttribute('aria-disabled') !== 'true' && !previous.disabled
+          && !previous.closest('[inert]') && previous.getClientRects().length > 0;
+        const target = canRestore ? previous : document.getElementById('nav-dashboard');
+        if (target && target.focus) { try { target.focus(); } catch (e) {} }
+        unlockPrevFocus = null;
+      }
+    }
     async function maybeUnlock() {
       try {
         const res = await fetch('/api/status');
         if (res.status === 401) {
-          const ov = document.getElementById('unlock-overlay');
-          if (ov) ov.style.display = 'flex';
-          const inp = document.getElementById('unlock-key');
-          if (inp) inp.focus();
+          setUnlockVisible(true);
         }
       } catch (e) {}
     }
@@ -5155,8 +5656,7 @@
         if (res.ok) {
           if (inp) inp.value = '';
           cfgInlineError('unlock-error', null);
-          const ov = document.getElementById('unlock-overlay');
-          if (ov) ov.style.display = 'none';
+          setUnlockVisible(false);
           updateStatus();
           refreshSettings();
           return;

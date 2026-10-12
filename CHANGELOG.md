@@ -6,6 +6,16 @@ Todos los cambios publicables de la app. El formato sigue
 
 ## [Unreleased]
 
+## [2.1.4] - 2026-10-12
+
+### Mejorado
+- Rediseña los iconos y estados de la barra lateral, y hace más visible el rol
+  configurado para esta PC.
+- Renueva la elección inicial entre Oráculo y Guest con explicaciones claras,
+  soporte para teclado y mejor adaptación a pantallas pequeñas.
+- Si no se puede guardar el rol, el diálogo permanece abierto y permite volver
+  a intentarlo.
+
 ## [2.1.3] - 2026-10-12
 
 ### Mejorado
