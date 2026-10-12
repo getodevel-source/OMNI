@@ -186,33 +186,6 @@
     }
     .header-spacer { flex: 1; }
 
-    .header-status {
-      font-size: var(--fs-s);
-      font-weight: var(--fw-medium);
-      padding: 4px 10px;
-      border-radius: var(--r-pill);
-      display: flex;
-      align-items: center;
-      gap: 7px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      color: var(--text-muted);
-      white-space: nowrap;
-    }
-    .header-status .status-dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: var(--text-dim);
-      flex-shrink: 0;
-    }
-    .header-status.online { color: var(--ok); border-color: var(--accent-line); background: var(--accent-soft); }
-    .header-status.online .status-dot { background: var(--ok); box-shadow: 0 0 8px var(--ok-glow); }
-    .header-status.loading { color: var(--warn); border-color: rgba(154, 163, 171, 0.35); background: var(--warn-glow); }
-    .header-status.loading .status-dot { background: var(--warn); animation: pulse 1.2s infinite ease-in-out; }
-    .header-status.error { color: var(--danger-soft); border-color: rgba(255, 255, 255, 0.35); background: var(--red-glow); }
-    .header-status.error .status-dot { background: var(--danger); }
-
     @keyframes pulse {
       0%, 100% { opacity: 0.4; transform: scale(0.9); }
       50% { opacity: 1; transform: scale(1.1); }
@@ -1435,24 +1408,574 @@
       animation: spin 0.7s linear infinite; vertical-align: -1px;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
-    @media (max-width: 1100px) {
-      .tabs-nav { order: 3; width: 100%; overflow-x: auto; }
-      header { flex-wrap: wrap; padding: 8px 16px; row-gap: 8px; }
-    }
     @media (max-width: 900px) {
-      .dashboard-layout { grid-template-columns: 1fr; }
-      .tab-panel { padding: var(--sp-4); }
       .cfg-2col { grid-template-columns: 1fr; }
     }
-    @media (max-width: 420px) {
+    /* ---------- OMNI visual system ---------- */
+    :root {
+      color-scheme: light;
+      --bg: #f3f1e9;
+      --surface: #fffdf8;
+      --surface-elevated: #f8f6ef;
+      --surface-hover: #efeee5;
+      --surface-active: #e8efcf;
+      --border: rgba(33, 43, 36, 0.15);
+      --border-subtle: rgba(33, 43, 36, 0.08);
+      --border-hover: rgba(33, 43, 36, 0.25);
+      --border-focus: rgba(73, 113, 54, 0.72);
+      --text: #1c2721;
+      --text-muted: #49594e;
+      --text-subtle: #5e6c61;
+      --text-dim: #5e6c61;
+      --accent: #3a6844;
+      --accent-bg: #cce878;
+      --accent-text: #24351f;
+      --accent-soft: rgba(163, 197, 79, 0.13);
+      --accent-line: rgba(105, 145, 57, 0.36);
+      --ok: #287348;
+      --ok-glow: rgba(40, 115, 72, 0.15);
+      --emerald: #287348;
+      --emerald-glow: rgba(40, 115, 72, 0.15);
+      --warn: #936015;
+      --warn-glow: rgba(184, 127, 38, 0.12);
+      --amber: #936015;
+      --amber-glow: rgba(184, 127, 38, 0.12);
+      --danger: #a7433c;
+      --danger-soft: #963b35;
+      --red: #a7433c;
+      --red-glow: rgba(167, 67, 60, 0.10);
+      --blue: #405f7a;
+      --font-sans: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+      --fs-s: 12px;
+      --fs-m: 14px;
+      --fs-l: 28px;
+      --r-s: 8px;
+      --r-m: 13px;
+      --r-l: 18px;
+      --r-pill: 999px;
+      --shadow-card: 0 12px 34px rgba(33, 43, 36, 0.07);
+      --shadow-pop: 0 22px 54px rgba(24, 31, 26, 0.18);
+      --focus-ring: 0 0 0 3px rgba(105, 145, 57, 0.20);
+      --ease-ui: cubic-bezier(.22, 1, .36, 1);
+    }
+
+    * { -webkit-font-smoothing: antialiased; }
+    body {
+      display: grid;
+      grid-template-columns: 244px minmax(0, 1fr);
+      grid-template-rows: 64px minmax(0, 1fr);
+      width: 100%;
+      max-width: 100vw;
+      overflow-x: clip;
+      height: 100vh;
+      height: 100dvh;
+      background:
+        radial-gradient(ellipse at 84% 0%, rgba(193, 207, 151, 0.17), transparent 34%),
+        var(--bg);
+      line-height: 1.55;
+    }
+
+    header {
+      grid-column: 1;
+      grid-row: 1 / -1;
+      width: 244px;
+      min-width: 0;
+      min-height: 0;
+      padding: 23px 15px 17px;
+      display: flex;
+      flex-direction: column;
+      flex-wrap: nowrap;
+      align-items: stretch;
+      gap: 0;
+      color: #e9eee8;
+      background: #151d19;
+      border: 0;
+      border-right: 1px solid rgba(255, 255, 255, 0.065);
+      z-index: 30;
+    }
+    .brand-section { gap: 11px; padding: 0 8px; margin-bottom: 39px; }
+    .brand-logo {
+      width: 36px;
+      height: 36px;
+      border-radius: 12px;
+      background: linear-gradient(145deg, rgba(255,255,255,.11), rgba(255,255,255,.035));
+      border: 1px solid rgba(255,255,255,.13);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 5px 16px rgba(0,0,0,.14);
+    }
+    .brand-logo img { width: 30px; height: 30px; mix-blend-mode: screen; }
+    .brand-titles { gap: 9px; }
+    .brand-name { color: #f5f6f0; font-size: 16px; letter-spacing: .12em; }
+    .brand-badge {
+      color: #c2cbbf;
+      background: rgba(255,255,255,.055);
+      border-color: rgba(255,255,255,.10);
+      padding: 2px 7px;
+      font-size: 10px;
+    }
+    .tabs-nav {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 5px;
+      padding: 0;
+      background: transparent;
+      border: 0;
+      border-radius: 0;
+    }
+    .tab-btn {
+      position: relative;
+      min-height: 45px;
+      width: 100%;
+      padding: 9px 12px;
+      gap: 12px;
+      border: 1px solid transparent;
+      border-radius: 11px;
+      color: #aebbb0;
+      font-size: 13px;
+      font-weight: 550;
+      text-align: left;
+      transition: color 240ms var(--ease-ui), background 240ms var(--ease-ui), border-color 240ms var(--ease-ui), transform 240ms var(--ease-ui);
+    }
+    .tab-btn:hover {
+      color: #f5f6f0;
+      background: rgba(255,255,255,.055);
+      transform: translateX(2px);
+    }
+    .tab-btn.active {
+      color: #d9ef9a;
+      background: linear-gradient(105deg, rgba(181, 211, 97, .16), rgba(181, 211, 97, .055));
+      border-color: rgba(201, 232, 120, .12);
+      box-shadow: inset 3px 0 0 #cce878;
+    }
+    .tab-btn:focus-visible { outline-color: #d7ef9a; outline-offset: 1px; }
+    .nav-icon { display: inline-flex; width: 19px; height: 19px; flex: 0 0 19px; color: currentColor; }
+    .nav-icon svg { width: 19px; height: 19px; display: block; }
+
+    .role-switch {
+      width: 100%;
+      justify-content: space-between;
+      gap: 3px;
+      margin-top: auto;
+      padding: 3px;
+      background: rgba(255,255,255,.045);
+      border: 1px solid rgba(255,255,255,.075);
+      border-radius: 11px;
+    }
+    .role-btn { flex: 1; padding: 7px 8px; color: #afbbb0; font-size: 11px; }
+    .role-btn:hover { color: #f5f6f0; }
+    .role-btn.active { color: #24351f; background: #cce878; }
+    .lang-select-wrap { gap: 10px; margin: 13px 7px 0; justify-content: space-between; }
+    .lang-select-wrap label { color: #afbbb0; font-size: 11px; }
+    .lang-select {
+      width: auto;
+      min-width: 66px;
+      padding: 6px 25px 6px 9px;
+      color: #edf1ea;
+      background: rgba(255,255,255,.065);
+      border-color: rgba(255,255,255,.12);
+      border-radius: 8px;
+      font-size: 11px;
+    }
+    .lang-select-wrap .select-wrapper::after { right: 10px; border-top-color: #aeb9ad; }
+
+    .status-strip {
+      grid-column: 2;
+      grid-row: 1;
+      min-width: 0;
+      padding: 0 31px;
+      gap: 13px;
+      background: rgba(255,253,248,.92);
+      border: 0;
+      border-bottom: 1px solid rgba(33,43,36,.10);
+    }
+    .strip-state { gap: 9px; color: var(--text-muted); font-size: 12px; }
+    .strip-dot { width: 8px; height: 8px; background: #a9b0a8; }
+    .strip-state.online { color: #28653d; }
+    .strip-state.online .strip-dot { background: #378253; box-shadow: 0 0 0 4px rgba(55,130,83,.12); }
+    .strip-state.loading, .strip-state.starting { color: #906016; }
+    .strip-state.loading .strip-dot, .strip-state.starting .strip-dot { background: #c99036; animation: pulse 1.5s var(--ease-ui) infinite; }
+    .strip-state.error { color: #a4423b; }
+    .strip-state.error .strip-dot { background: #bd594f; }
+    .strip-port {
+      color: #5e6c61;
+      background: #f2f0e8;
+      border: 1px solid rgba(33,43,36,.11);
+      border-radius: var(--r-pill);
+      padding: 4px 9px;
+      font-size: 11px;
+    }
+    .strip-countdown { color: #5e6c61; font-size: 11px; }
+    .strip-action { margin-left: auto; }
+    .status-strip .btn { padding: 9px 17px; font-size: 12px; }
+
+    main {
+      grid-column: 2;
+      grid-row: 2;
+      min-width: 0;
+      min-height: 0;
+      background: transparent;
+    }
+    .tab-panel {
+      min-width: 0;
+      min-height: 0;
+      padding: 30px 34px 36px;
+      gap: 18px;
+    }
+    .tab-panel.active { animation: workspace-enter 360ms var(--ease-ui) both; }
+    @keyframes workspace-enter {
+      from { opacity: 0; transform: translateY(7px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .section-shell { gap: 7px; max-width: 1480px; }
+    .section-shell.narrow { max-width: 1120px; }
+    .section-head { align-items: end; gap: 8px 18px; }
+    .section-title { font-size: clamp(24px, 2vw, 29px); letter-spacing: -.045em; line-height: 1.2; }
+    .section-sub { font-size: 12px; color: #5e6c61; }
+    .dashboard-layout {
+      grid-template-columns: minmax(0, 1.18fr) minmax(300px, .82fr);
+      max-width: 1480px;
+      gap: 20px;
+      margin-top: 8px !important;
+    }
+    .dash-col { gap: 17px; }
+
+    /* Main panels keep a quiet double rim; inner content stays on one surface. */
+    .card, .terminal-container, .chat-container {
+      background: #e9e7dc;
+      border: 1px solid rgba(46, 54, 42, .11);
+      border-radius: 18px;
+      padding: 4px;
+      box-shadow: 0 15px 38px rgba(38, 43, 34, .065), inset 0 1px 0 rgba(255,255,255,.86);
+    }
+    .card-header {
+      min-height: 51px;
+      padding: 14px 18px 12px;
+      background: var(--surface);
+      border: 0;
+      border-bottom: 1px solid rgba(33,43,36,.075);
+      border-radius: 13px 13px 0 0;
+    }
+    .card-title { font-size: 14px; letter-spacing: -.012em; }
+    .card-meta { color: #5e6c61; }
+    .card-body {
+      padding: 18px;
+      background: var(--surface);
+      border-radius: 0 0 13px 13px;
+      gap: 15px;
+    }
+
+    .field-label { color: #4c5b50; font-size: 12px; font-weight: 600; }
+    .profile-hint, .field-hint { color: #5e6c61; font-size: 12px; line-height: 1.58; }
+    .profile-hint.warn {
+      color: #76561e;
+      background: #fbf4e6;
+      border: 1px solid rgba(158,110,35,.18);
+      border-left: 3px solid #bd8b3a;
+      border-radius: 9px;
+      padding: 9px 11px;
+      line-height: 1.5;
+    }
+    select, input[type="text"], input[type="password"] {
+      min-height: 41px;
+      padding: 9px 12px;
+      color: #202b24;
+      background: #fffefa;
+      border: 1px solid rgba(38,51,42,.16);
+      border-radius: 9px;
+      cursor: pointer;
+      transition: background 220ms var(--ease-ui), border-color 220ms var(--ease-ui), box-shadow 220ms var(--ease-ui);
+    }
+    input[type="text"], input[type="password"] { cursor: text; }
+    main select:hover, main input[type="text"]:hover, main input[type="password"]:hover { background: #fff; border-color: rgba(38,51,42,.27); }
+    .lang-select:hover { background: rgba(255,255,255,.10); border-color: rgba(255,255,255,.20); }
+    select:focus-visible, input[type="text"]:focus-visible, input[type="password"]:focus-visible, textarea:focus-visible, .cfg-textarea:focus-visible {
+      border-color: #6a923c;
+      box-shadow: var(--focus-ring);
+      outline: none;
+    }
+    .select-wrapper::after { border-top-color: #718076; }
+    .pairing-key-row {
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: end;
+      gap: 10px;
+    }
+    #cfg-server-pairing {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      letter-spacing: .12em;
+      user-select: all;
+    }
+    .pairing-show-btn { min-width: 104px; min-height: 41px; padding: 0 14px; gap: 8px; }
+    .pairing-show-btn svg { width: 16px; height: 16px; flex: 0 0 16px; }
+    details.advanced, .cli-access-box, .feature-list, .cfg-profile-row {
+      background: #f7f5ee;
+      border-color: rgba(33,43,36,.095);
+      border-radius: 11px;
+    }
+    details.advanced { padding: 11px 13px; }
+    details.advanced summary { color: #536257; font-size: 12px; }
+    .cli-access-box { padding: 13px; }
+    .cli-row-effort, .cfg-profile-row { border-color: rgba(33,43,36,.10); }
+
+    .btn, .tool-btn, .chat-send-btn, .chat-stop-btn {
+      border-radius: 10px;
+      transition: color 220ms var(--ease-ui), background 220ms var(--ease-ui), border-color 220ms var(--ease-ui), box-shadow 220ms var(--ease-ui), transform 220ms var(--ease-ui);
+    }
+    .btn { padding: 9px 15px; }
+    .btn-primary {
+      color: #24351f;
+      background: #cce878;
+      border-color: #cce878;
+      border-radius: var(--r-pill);
+      box-shadow: 0 5px 14px rgba(122,153,54,.16), inset 0 1px 0 rgba(255,255,255,.38);
+    }
+    .btn-primary:hover:not(:disabled) { color: #1d2c1b; background: #bede67; border-color: #bede67; filter: none; transform: translateY(-1px); }
+    .btn-primary:active:not(:disabled) { transform: scale(.985); }
+    .btn-secondary, .tool-btn {
+      color: #405148;
+      background: #f7f5ee;
+      border-color: rgba(33,43,36,.13);
+    }
+    .btn-secondary:hover:not(:disabled), .tool-btn:hover:not(:disabled) {
+      color: #1d2d23;
+      background: #efefe5;
+      border-color: rgba(70,104,62,.27);
+      transform: translateY(-1px);
+    }
+    .tool-btn { padding: 6px 10px; }
+    .btn-danger, .chat-stop-btn {
+      color: #963e38;
+      background: #fff5f1;
+      border-color: rgba(167,67,60,.23);
+    }
+    .error-banner { color: #963e38; background: #fff3ef; border-color: rgba(167,67,60,.22); border-radius: 10px; }
+    .empty-state { color: #5e6c61; background: #faf9f4; border-color: rgba(33,43,36,.16); border-radius: 11px; }
+    .toast { color: var(--text); background: #fffefa; border-color: rgba(33,43,36,.14); box-shadow: var(--shadow-pop); }
+
+    .metric-box {
+      padding: 14px;
+      gap: 7px;
+      background: #f8f6ef;
+      border: 1px solid rgba(33,43,36,.075);
+      border-radius: 11px;
+    }
+    .metric-label, .telemetry-title { color: #5e6c61; font-size: 11px; letter-spacing: .07em; }
+    .metric-label { min-height: 2.7em; line-height: 1.4; }
+    .metric-value { color: #202d24; font-size: 19px; letter-spacing: -.025em; }
+    .metric-value.highlight { color: #3a6844; }
+    .metric-sub { color: #5e6c61; }
+    .metric-box.warn { background: #fbf4e7; border-color: rgba(158,110,35,.19); }
+    .metric-box.warn .metric-label, .metric-box.warn .metric-value { color: #875a17; }
+    .telemetry-grid { gap: 9px; }
+    .telemetry-grid .metric-box { padding: 12px; gap: 5px; }
+    .telemetry-grid .metric-value { font-size: 16px; }
+    .telemetry-meta { color: #5e6c61; }
+    .feature-list { padding: 13px; }
+    .feature-item { color: #536257; }
+    .feature-dot { background: #4b9660; }
+    .model-dl-bar { background: #ecebe2; border-color: rgba(33,43,36,.11); }
+    .model-dl-fill { background: #6e9b43; transition: width 320ms var(--ease-ui); }
+    .model-badge.verified { color: #356241; background: #edf3df; border-color: rgba(69,112,53,.18); }
+    .model-badge.downloaded { color: #536257; background: #f4f3ec; border-color: rgba(33,43,36,.10); }
+    .models-table th, .usage-table th { color: #5e6c61; }
+    .models-table th, .models-table td, .usage-table th, .usage-table td { border-color: rgba(33,43,36,.09); }
+    .models-table th, .models-table td, .usage-table th, .usage-table td { color: #4f5f54; }
+    .models-table td.model-name { color: #202b24; }
+    .models-table tbody tr:hover, .usage-table tbody tr:hover { background: #f6f5ee; }
+    .usage-chart, .usage-raw-row { background: #f8f6ef; border-color: rgba(33,43,36,.08); }
+    .usage-bar { background: #759d4a; }
+    .usage-raw-list { color: #4f5f54; }
+    .usage-section-title { color: #5e6c61; }
+
+    .chat-container {
+      max-width: 1120px;
+      border-radius: 19px;
+      background: #e9e7dc;
+      box-shadow: 0 18px 44px rgba(38,43,34,.075), inset 0 1px 0 rgba(255,255,255,.9);
+    }
+    .chat-header {
+      min-height: 58px;
+      padding: 12px 17px;
+      background: var(--surface);
+      border: 0;
+      border-bottom: 1px solid rgba(33,43,36,.075);
+      border-radius: 14px 14px 0 0;
+    }
+    .chat-header-title { color: #202b24; font-size: 14px; }
+    .chat-scroll-area { padding: 26px clamp(20px, 5vw, 66px); background: var(--surface); gap: 22px; }
+    .chat-scroll-area:has(.msg-group:only-child) { justify-content: center; align-items: center; }
+    .msg-group { max-width: 78%; gap: 7px; }
+    .msg-group.user { max-width: 76%; }
+    .msg-group.assistant { max-width: 88%; }
+    .msg-group.assistant:only-child { align-self: center; align-items: center; max-width: 610px; }
+    .msg-bubble { padding: 14px 17px; border-radius: 14px; line-height: 1.72; }
+    .msg-group.user .msg-bubble { color: #f8faef; background: #35533b; border-color: rgba(53,83,59,.12); border-radius: 14px 14px 4px 14px; }
+    .msg-group.assistant .msg-bubble { color: #344239; background: #f7f6ef; border-color: rgba(33,43,36,.085); border-radius: 14px 14px 14px 4px; }
+    .msg-group.assistant:only-child .msg-bubble { padding: 20px 24px; text-align: center; background: #f7f6ef; border-color: rgba(33,43,36,.08); }
+    .msg-bubble h1, .msg-bubble h2, .msg-bubble h3 { color: #26382d; }
+    .msg-bubble code { color: #315c47; background: #e9eee3; }
+    .code-block-wrapper { background: #202822; border-color: rgba(33,43,36,.18); border-radius: 12px; }
+    .code-block-header { color: #d4ddd2; background: #2c372f; border-color: rgba(255,255,255,.08); }
+    .code-block-wrapper pre { color: #e1e8de; }
+    .copy-btn:hover { color: #fff; background: rgba(255,255,255,.1); }
+    .thinking-wrapper { border-left-color: #8aa36e; color: #5e6c61; }
+    .thinking-toggle { color: #506257; }
+    .chat-dock { padding: 14px 17px 11px; gap: 8px; background: var(--surface); border-color: rgba(33,43,36,.08); }
+    .chat-opt-label { color: #5e6c61; }
+    .input-row {
+      padding: 9px 10px 9px 14px;
+      background: #fbfaf5;
+      border: 1px solid rgba(33,43,36,.16);
+      border-radius: 14px;
+      transition: background 220ms var(--ease-ui), border-color 220ms var(--ease-ui), box-shadow 220ms var(--ease-ui);
+    }
+    .input-row:focus-within { background: #fffefa; border-color: rgba(77,120,55,.52); box-shadow: 0 0 0 3px rgba(105,145,57,.12); }
+    .chat-textarea { color: #243128; font-size: 14px; }
+    .chat-textarea::placeholder { color: #5e6c61; }
+    .chat-send-btn, .chat-stop-btn { width: 35px; height: 35px; border-radius: 12px; }
+    .chat-send-btn { color: #24351f; background: #cce878; border-color: #cce878; }
+    .chat-send-btn:hover:not(:disabled) { filter: none; background: #bede67; transform: translateY(-1px); }
+    .chat-stop-btn { color: #963e38; background: #fff5f1; border-color: rgba(167,67,60,.20); }
+    .chat-dock-hints { color: #5e6c61; font-size: 11px; }
+    .msg-meta { color: #5e6c61; }
+
+    .terminal-container { background: #e9e7dc; border-color: rgba(46,54,42,.12); }
+    .terminal-header { background: var(--surface); border-color: rgba(33,43,36,.09); border-radius: 13px 13px 0 0; }
+    #terminal-stream { color: #d5dfd5; background: #202822; border-radius: 0 0 13px 13px; }
+    .info-card { gap: 12px; background: var(--surface); border: 1px solid rgba(33,43,36,.10); border-radius: 13px; padding: 19px; box-shadow: 0 8px 24px rgba(38,43,34,.045); }
+    .info-card h3 { font-size: 14px; }
+    .info-card p { color: #536257; }
+    .info-card code { color: #315c47; background: #f0f2e9; border-color: rgba(33,43,36,.08); }
+    .cfg-profile-row.current { border-color: rgba(76,119,55,.38); background: #f0f5e4; }
+    .cfg-current-badge { color: #365f40; background: #edf3df; border-color: rgba(69,112,53,.18); }
+    .cfg-textarea { color: #26382d; background: #fbfaf5; border-color: rgba(33,43,36,.16); border-radius: 9px; }
+    .cfg-check { color: #4f5f54; }
+    .cfg-check input { accent-color: #6c913b; }
+    .cfg-ok { color: #356241; }
+    .skel::after { background: linear-gradient(90deg, transparent, rgba(33,43,36,.055), transparent); }
+    ::-webkit-scrollbar-thumb { background: #c9cec2; border-radius: var(--r-pill); }
+    ::-webkit-scrollbar-thumb:hover { background: #a9b5a6; }
+
+    @media (max-width: 1120px) {
+      body { grid-template-columns: 218px minmax(0, 1fr); }
+      header { width: 218px; }
+      .tab-panel { padding: 28px 26px 32px; }
+      .dashboard-layout { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 760px) {
+      body { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 58px minmax(0, 1fr); }
+      header {
+        grid-column: 1;
+        grid-row: 1;
+        width: 100%;
+        padding: 12px 16px 13px;
+        display: flex;
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0;
+        border-right: 0;
+        border-bottom: 1px solid rgba(255,255,255,.075);
+      }
+      .brand-section { margin: 0; padding: 0; }
+      .role-switch { width: auto; margin: 0 0 0 auto; }
+      .role-btn { flex: 0 0 auto; }
+      .lang-select-wrap { width: auto; margin: 0 0 0 10px; gap: 0; }
+      .lang-select-wrap label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+      .lang-select { min-width: 58px; }
+      .tabs-nav {
+        flex-direction: row;
+        width: 100%;
+        margin-top: 12px;
+        padding: 3px;
+        gap: 3px;
+        border: 1px solid rgba(255,255,255,.075);
+        border-radius: 12px;
+        background: rgba(255,255,255,.045);
+      }
+      .tab-btn { flex: 1 1 0; justify-content: center; min-width: 0; min-height: 39px; padding: 7px 8px; gap: 7px; }
+      .tab-btn:hover { transform: none; }
+      .tab-btn.active { box-shadow: inset 0 -2px 0 #cce878; }
+      .status-strip { grid-column: 1; grid-row: 2; padding: 0 16px; }
+      main { grid-column: 1; grid-row: 3; }
+      .tab-panel { padding: 24px 18px 28px; }
+      .section-head { align-items: flex-start; flex-direction: column; }
+      .section-sub { max-width: 58ch; }
+      .chat-container { min-height: 0; }
+    }
+    @media (max-width: 480px) {
+      header { padding: 11px 12px 12px; }
+      .brand-logo { width: 30px; height: 30px; }
+      .brand-logo img { width: 27px; height: 27px; }
+      .brand-name { font-size: 15px; }
+      .brand-badge { font-size: 9px; }
+      .role-switch { margin-left: auto; }
+      .role-btn { padding: 6px 7px; font-size: 10px; }
+      .lang-select-wrap { margin-left: 6px; }
+      .lang-select { min-width: 52px; padding: 5px 21px 5px 7px; }
+      .tabs-nav { margin-top: 10px; }
+      .tab-btn { min-height: 38px; }
+      .tab-btn > span:last-child {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0,0,0,0);
+        white-space: nowrap;
+        border: 0;
+      }
+      .tab-btn { gap: 0; }
+      .status-strip { padding: 0 12px; gap: 8px; }
+      .status-strip .btn { padding: 8px 12px; }
+      .strip-port { max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
+      .strip-countdown {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+      .tab-panel { padding: 20px 12px 24px; }
+      .card-body { padding: 14px; }
+      .card-header { padding: 13px 14px 11px; }
+      .dashboard-layout { gap: 14px; }
+      .dash-col { gap: 14px; }
+      .fields-row, .cfg-2col { grid-template-columns: 1fr; }
+      .pairing-key-row { grid-template-columns: minmax(0, 1fr) auto; }
       .telemetry-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .header-status span.hdr-status-text { display: none; }
+      .chat-container { border-radius: 17px; padding: 4px; }
+      .chat-scroll-area { padding: 18px 13px; }
+      .msg-group, .msg-group.user, .msg-group.assistant { max-width: 94%; }
+      .chat-dock { padding: 11px 10px 9px; }
+      .chat-dock-hints { font-size: 10px; }
+      .chat-dock-hints span:first-child { display: none; }
+      .model-dl-row { flex-wrap: wrap; }
+      .model-dl-row input:first-child { flex: 1 1 100%; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
     }
   </style>
 </head>
 <body>
 
-  <!-- App header: product + version, engine chip, language, primary nav -->
+  <!-- Workspace sidebar: product identity, navigation, role, and language -->
   <header>
     <div class="brand-section">
       <div class="brand-logo" aria-hidden="true">
@@ -1464,11 +1987,28 @@
       </div>
     </div>
 
-    <div class="header-spacer"></div>
+    <nav class="tabs-nav" data-i18n-aria="nav.label" aria-label="Navegación principal" aria-orientation="vertical" id="main-nav" role="tablist">
+      <button class="tab-btn active" data-tab="dashboard" onclick="switchTab('dashboard')" id="nav-dashboard" role="tab" aria-selected="true" aria-controls="tab-dashboard" tabindex="0" onkeydown="onNavKey(event)">
+        <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></svg></span>
+        <span data-i18n="nav.panel">Panel</span>
+      </button>
+      <button class="tab-btn" data-tab="chat" onclick="switchTab('chat')" id="nav-chat" role="tab" aria-selected="false" aria-controls="tab-chat" tabindex="-1" onkeydown="onNavKey(event)">
+        <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11.4a7.4 7.4 0 0 1-7.8 7.4 8 8 0 0 1-3.2-.7L4 20l1.5-4.2A7.4 7.4 0 1 1 20 11.4Z"/><path d="M8.5 11.5h.01M12 11.5h.01M15.5 11.5h.01" stroke-width="2.2"/></svg></span>
+        <span data-i18n="nav.chat">Chat</span>
+      </button>
+      <button class="tab-btn" data-tab="conexion" onclick="switchTab('conexion')" id="nav-conexion" role="tab" aria-selected="false" aria-controls="tab-conexion" tabindex="-1" onkeydown="onNavKey(event)">
+        <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="m8.2 7.3 2.5 8M15.8 7.3l-2.5 8M8.5 6h7"/></svg></span>
+        <span data-i18n="nav.conexion">Conexión</span>
+      </button>
+      <button class="tab-btn" data-tab="settings" onclick="switchTab('settings')" id="nav-settings" role="tab" aria-selected="false" aria-controls="tab-settings" tabindex="-1" onkeydown="onNavKey(event)">
+        <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8.2a3.8 3.8 0 1 0 0 7.6 3.8 3.8 0 0 0 0-7.6Z"/><path d="m19.4 13.5 1.1.8-1.3 2.3-1.3-.5a7.7 7.7 0 0 1-1.4.8l-.2 1.4h-2.7l-.3-1.4a7.7 7.7 0 0 1-1.5-.8l-1.2.5-1.4-2.3 1.1-.9a7.1 7.1 0 0 1 0-1.7l-1.1-.8 1.4-2.3 1.2.5a7.7 7.7 0 0 1 1.5-.8l.3-1.4h2.7l.2 1.4a7.7 7.7 0 0 1 1.4.8l1.3-.5 1.3 2.3-1.1.8a7.1 7.1 0 0 1 0 1.8Z" transform="translate(-1.5 0)"/></svg></span>
+        <span data-i18n="nav.settings">Ajustes</span>
+      </button>
+    </nav>
 
-    <div id="header-status" class="header-status stopped" aria-hidden="true">
-      <span class="status-dot" aria-hidden="true"></span>
-      <span class="hdr-status-text" id="header-status-text" data-i18n="hdr.stopped" aria-hidden="true">En reposo</span>
+    <div class="role-switch" role="group" data-i18n-aria="settings.roleGroup" aria-label="Rol">
+      <button class="role-btn active" type="button" id="hs-oraculo" onclick="setRole('oraculo')" aria-pressed="true"><span data-i18n="settings.roleOraculo">Oráculo</span></button>
+      <button class="role-btn" type="button" id="hs-guest" onclick="setRole('guest')" aria-pressed="false"><span data-i18n="settings.roleGuest">Guest</span></button>
     </div>
 
     <div class="lang-select-wrap">
@@ -1480,26 +2020,6 @@
         </select>
       </div>
     </div>
-
-    <div class="role-switch" role="group" data-i18n-aria="settings.roleGroup" aria-label="Rol">
-      <button class="role-btn active" type="button" id="hs-oraculo" onclick="setRole('oraculo')" aria-pressed="true"><span data-i18n="settings.roleOraculo">Oráculo</span></button>
-      <button class="role-btn" type="button" id="hs-guest" onclick="setRole('guest')" aria-pressed="false"><span data-i18n="settings.roleGuest">Guest</span></button>
-    </div>
-
-    <nav class="tabs-nav" aria-label="OMNI" id="main-nav" role="tablist">
-      <button class="tab-btn active" data-tab="dashboard" onclick="switchTab('dashboard')" id="nav-dashboard" role="tab" aria-selected="true" aria-controls="tab-dashboard" tabindex="0" onkeydown="onNavKey(event)">
-        <span data-i18n="nav.panel">Panel</span>
-      </button>
-      <button class="tab-btn" data-tab="chat" onclick="switchTab('chat')" id="nav-chat" role="tab" aria-selected="false" aria-controls="tab-chat" tabindex="-1" onkeydown="onNavKey(event)">
-        <span data-i18n="nav.chat">Chat</span>
-      </button>
-      <button class="tab-btn" data-tab="conexion" onclick="switchTab('conexion')" id="nav-conexion" role="tab" aria-selected="false" aria-controls="tab-conexion" tabindex="-1" onkeydown="onNavKey(event)">
-        <span data-i18n="nav.conexion">Conexión</span>
-      </button>
-      <button class="tab-btn" data-tab="settings" onclick="switchTab('settings')" id="nav-settings" role="tab" aria-selected="false" aria-controls="tab-settings" tabindex="-1" onkeydown="onNavKey(event)">
-        <span data-i18n="nav.settings">Ajustes</span>
-      </button>
-    </nav>
   </header>
   <!-- Persistent engine status strip: visible + operable from every tab (LM-UI-2) -->
   <div id="status-strip" class="status-strip">
@@ -1734,12 +2254,17 @@
                 <span id="tel-requests" class="metric-value">—</span>
               </div>
               <div class="metric-box" id="tel-decode-box" style="display: none;">
-                <span class="metric-label" data-i18n="telemetry.verified">Velocidad verificada</span>
+                <span class="metric-label" data-i18n="telemetry.verified">Decode informado por el motor</span>
                 <span id="tel-decode-tps" class="metric-value highlight">—</span>
                 <span id="tel-decode-samples" class="metric-sub" style="display: none;">—</span>
               </div>
+              <div class="metric-box" id="tel-request-box" style="display: none;">
+                <span class="metric-label" data-i18n="telemetry.requestRate">Completion por request total</span>
+                <span id="tel-request-tps" class="metric-value">—</span>
+                <span id="tel-request-samples" class="metric-sub" style="display: none;">—</span>
+              </div>
               <div class="metric-box" id="tel-accept-box" style="display: none;">
-                <span class="metric-label" data-i18n="telemetry.gpuCheck">Verificación GPU</span>
+                <span class="metric-label" data-i18n="telemetry.acceptance">Puerta de arranque</span>
                 <span id="tel-accept-status" class="metric-value">—</span>
               </div>
               <div class="metric-box warn" id="tel-slow-box" role="status" style="display: none;">
@@ -1900,13 +2425,13 @@
               <div class="field-label"><span data-i18n="settings.serverIps">Esta PC en la LAN</span></div>
               <div class="telemetry-meta" role="status"><span id="cfg-server-ips">–</span></div>
               <div class="field-label" style="margin-top: 4px;"><span data-i18n="settings.serverPairing">Emparejar (QR o copiar)</span></div>
-              <div class="fields-row">
-                <div class="field-group" style="flex: 1;">
+              <div class="fields-row pairing-key-row">
+                <div class="field-group">
                   <!-- P2 producción: la clave de pairing no se exhibe en texto plano (shoulder surfing / capturas): `password` + mostrar temporal con autoclear. -->
                   <input type="password" id="cfg-server-pairing" readonly autocomplete="off" spellcheck="false" style="cursor: text;" data-i18n-aria="settings.serverPairing" aria-label="Pairing">
                 </div>
-                <div class="field-group" style="flex: 0 0 auto; align-self: end;">
-                  <button class="tool-btn" type="button" id="cfg-server-show" onclick="togglePairing()"><span data-i18n="settings.serverShow">Mostrar</span></button>
+                <div class="field-group pairing-show-field">
+                  <button class="tool-btn pairing-show-btn" type="button" id="cfg-server-show" onclick="togglePairing()" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12s3.2-6 9.5-6 9.5 6 9.5 6-3.2 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.4"/></svg><span id="cfg-server-show-label" data-i18n="settings.serverShow">Mostrar</span></button>
                 </div>
               </div>
               <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px;">
@@ -2019,8 +2544,8 @@
                   <input type="text" id="cfg-profile-context" inputmode="numeric" autocomplete="off" spellcheck="false" style="cursor: text;" placeholder="32768" data-i18n-aria="settings.profileContext" aria-label="Contexto (tokens)">
                 </div>
                 <div class="field-group">
-                  <label class="field-label" for="cfg-profile-cacheram"><span data-i18n="settings.profileCache">KV cache en RAM (MB)</span></label>
-                  <input type="text" id="cfg-profile-cacheram" inputmode="numeric" autocomplete="off" spellcheck="false" style="cursor: text;" placeholder="0" data-i18n-aria="settings.profileCache" aria-label="KV cache en RAM (MB)">
+                  <label class="field-label" for="cfg-profile-cacheram"><span data-i18n="settings.profileCache">Caché de prompts en RAM (MiB)</span></label>
+                  <input type="text" id="cfg-profile-cacheram" inputmode="numeric" autocomplete="off" spellcheck="false" style="cursor: text;" placeholder="0" data-i18n-aria="settings.profileCache" aria-label="Caché de prompts en RAM (MiB)">
                 </div>
               </div>
               <label class="field-label" for="cfg-profile-flags"><span data-i18n="settings.profileFlags">Flags extra (uno por línea)</span></label>
@@ -2179,7 +2704,7 @@
               <div class="model-dl-row" style="margin-top: 8px;">
                 <input type="text" id="dl-repo" data-i18n-placeholder="models.dlRepoPh" data-i18n-aria="models.dlRepoPh" placeholder="owner/modelo-GGUF" autocomplete="off" spellcheck="false" aria-label="owner/modelo-GGUF">
                 <input type="text" id="dl-revision" data-i18n-placeholder="models.dlRevPh" data-i18n-aria="models.dlRevPh" placeholder="revisión (opcional)" autocomplete="off" spellcheck="false" style="max-width: 150px;" aria-label="revisión (opcional)">
-                <button class="tool-btn" type="button" id="btn-dl-advise" onclick="adviseModelDownload()" data-i18n-title="models.adviseTitle" title="Evaluar si cabe en tu equipo antes de descargar"><span data-i18n="models.advise">Evaluar</span> <span id="dl-advise-spinner" class="spinner" style="display: none;" aria-hidden="true"></span></button>
+                <button class="tool-btn" type="button" id="btn-dl-advise" onclick="adviseModelDownload()" data-i18n-title="models.adviseTitle" title="Ver estimación disponible antes de descargar"><span data-i18n="models.advise">Evaluar</span> <span id="dl-advise-spinner" class="spinner" style="display: none;" aria-hidden="true"></span></button>
                 <button class="tool-btn" type="button" id="btn-dl-start" onclick="startModelDownload()" data-i18n-title="models.dlBtnTitle" title="Descargar modelo desde el repositorio"><span data-i18n="models.download">Descargar</span></button>
               </div>
               <div id="model-advise-box" class="profile-hint" role="status" style="display: none; margin-top: 6px;"></div>
@@ -2211,6 +2736,7 @@
               <button class="tool-btn" type="button" id="cfg-update-dl" onclick="downloadUpdate()"><span data-i18n="settings.updateDownload">Descargar</span></button>
               <button class="tool-btn" type="button" id="cfg-update-cancel" onclick="cancelUpdate()"><span data-i18n="settings.updateCancel">Cancelar</span></button>
               <button class="btn btn-primary" type="button" id="cfg-update-restart" onclick="restartToInstall()" style="display: none;"><span data-i18n="settings.updateRestart">Reiniciar e instalar</span></button>
+            </div>
             <label class="cfg-check" style="margin-top: 6px;"><input type="checkbox" id="cfg-update-startup" onchange="saveUpdateCfg()"> <span data-i18n="settings.updateStartup">Comprobar al arrancar</span></label>
             <div class="profile-hint" data-i18n="settings.updateHint">La actualización se instala al reiniciar la app; tus modelos y ajustes se conservan.</div>
             <div id="cfg-update-ok" class="cfg-ok" style="display: none;" role="status" data-i18n="settings.saved">Guardado</div>
@@ -2272,6 +2798,7 @@
     /* ---------- Bilingual scaffold: every user-facing string lives here ---------- */
     const I18N = {
       es: {
+        'nav.label': 'Navegación principal',
         'nav.panel': 'Panel', 'nav.chat': 'Chat', 'nav.models': 'Modelos',
         'nav.usage': 'Uso', 'nav.logs': 'Logs', 'nav.specs': 'Specs',
         'nav.conexion': 'Conexión',
@@ -2285,10 +2812,10 @@
         'strip.loading': 'Cargando…', 'strip.retry': 'Reintentar',
         'strip.idle': 'En reposo', 'strip.active': 'Activo',
         'strip.starting': 'Cargando…', 'strip.startError': 'Error al iniciar',
-        'strip.verifying': 'Verificando GPU…',
+        'strip.verifying': 'Verificando motor…',
         'strip.loadPct': 'Cargando… {pct}% (ETA {eta})',
         'strip.loadSecs': 'Cargando… {s}s',
-        'telemetry.gpuFail': 'Verificación GPU: FALLÓ',
+        'telemetry.acceptanceFail': 'Falló la puerta de arranque',
         'models.fallbackName': 'modelo',
         'panel.title': 'Panel',
         'panel.sub': 'Motor local, telemetría y accesos en un vistazo.',
@@ -2324,12 +2851,14 @@
         'telemetry.title': 'Telemetría', 'telemetry.live': 'Telemetría en vivo',
         'telemetry.tokens': 'Tokens', 'telemetry.cache': 'Caché',
         'telemetry.requests': 'Solicitudes',
-        'telemetry.verified': 'Velocidad verificada',
+        'telemetry.verified': 'Decode informado por el motor',
+        'telemetry.requestRate': 'Completion por request total',
         'telemetry.samples': 'muestras: {list} t/s',
         'telemetry.slowTitle': 'Motor lento',
         'telemetry.slowText': 'El motor cargó lento ({median} t/s); puede mejorarse reiniciándolo una vez',
+        'telemetry.slowUnavailable': 'Rendimiento no evaluado: el motor no informó timings.',
         'telemetry.slowRestart': 'Reiniciar motor',
-        'telemetry.gpuCheck': 'Verificación GPU',
+        'telemetry.acceptance': 'Puerta de arranque',
         'telemetry.genRate': 'Gen t/s',
         'telemetry.pidLabel': 'PID',
         'telemetry.pidActive': 'Activo',
@@ -2359,8 +2888,8 @@
         'chat.effort': 'Razonamiento',
         'chat.hint': 'Presiona Shift + Enter para saltos de línea',
         'chat.hintReady': 'Listo para consultar',
-        'chat.hintLoading': 'Cargando tensores en GPU...',
-        'chat.hintVerifying': 'Verificando GPU…',
+        'chat.hintLoading': 'Cargando modelo…',
+        'chat.hintVerifying': 'Verificando motor…',
         'chat.hintError': 'Error en el motor',
         'chat.hintIdle': 'Motor en reposo',
         'chat.generating': 'Generando...',
@@ -2379,12 +2908,12 @@
         'models.starterHint': '¿Primera vez? Empieza con uno pequeño (2-3 GB, funciona en casi cualquier GPU) y luego sube a 27B si tu VRAM lo permite.',
         'models.starterFill': 'Rellenar ejemplo',
         'models.advise': 'Evaluar',
-        'models.adviseTitle': 'Evaluar si cabe en tu equipo antes de descargar',
+        'models.adviseTitle': 'Ver la estimación disponible antes de descargar',
         'models.adviseChecking': 'Evaluando compatibilidad con tu equipo…',
         'models.advise_fits': 'Cabe en tu GPU',
-        'models.advise_tight': 'Cabe justo (KV en RAM)',
+        'models.advise_tight': 'Estimación parcial',
         'models.advise_no_fit': 'No cabe en tu equipo',
-        'models.advise_unknown': 'Sin dato de tu GPU',
+        'models.advise_unknown': 'Estimación incompleta',
         'models.advise_no_gguf': 'Repo sin modelos',
         'models.advise_no_file': 'Fichero no encontrado',
         'models.searching': 'Buscando modelos...',
@@ -2480,13 +3009,13 @@
         'threads.quiet': '{n} hilos — silencioso',
         'threads.all': '{n} hilos — todos los lógicos',
         'profile.fbVelLabel': 'Chat diario — el más rápido (32K, todo en GPU)',
-        'profile.fbVelHint': 'Modelo y memoria de conversación 100% en VRAM (16 GB). Máxima velocidad (~17 t/s). Para chat, preguntas y código corto (<~30k palabras).',
+        'profile.fbVelHint': 'La ventana de 32K reserva menos memoria para KV que los perfiles amplios. El uso real de VRAM depende del modelo y la GPU; no garantiza una velocidad concreta.',
         'profile.fbMultiLabel': 'Multi-documento — varios PDFs y archivos (64K)',
-        'profile.fbMultiHint': 'Modelo en VRAM + parte del KV cache en RAM DDR5. Cede ~5% de velocidad para sostener ~60k palabras: varios documentos o un repo mediano.',
+        'profile.fbMultiHint': 'El contexto de 64K permite varios documentos o un repositorio mediano. La caché de prompts en RAM no mueve el KV activo.',
         'profile.fbLibrosLabel': 'Libros y repos largos — 128K de contexto',
-        'profile.fbLibrosHint': 'Memoria extendida en RAM DDR5. ~120k palabras (un libro entero). Velocidad baja ~15-20% porque parte del prompt viaja por DDR5.',
+        'profile.fbLibrosHint': 'Admite más contexto (hasta 128K). La memoria del KV activo depende del modelo y la GPU; --cache-ram sólo limita caché de prompts y no lo mueve a DDR5.',
         'profile.fbMaxLabel': 'Máximo contexto físico — 262K (el límite del modelo)',
-        'profile.fbMaxHint': 'Los 262,144 tokens nativos (~200k palabras). El más lento y el que más tensiona PSU/CPU: solo para casos extremos.',
+        'profile.fbMaxHint': 'El perfil de mayor contexto (262,144 tokens). También exige más memoria para el KV; úsalo si el modelo y la GPU seleccionada admiten esa ventana.',
         'settings.title': 'Ajustes',
         'settings.sub': 'Perfiles, generación, motor y avisos. Los cambios que afectan al motor se aplican al próximo arranque.',
         'settings.needsNew': 'Requiere la versión nueva del motor',
@@ -2500,7 +3029,7 @@
         'settings.profileDesc': 'Descripción',
         'settings.profileDescPh': 'Para qué sirve este perfil',
         'settings.profileContext': 'Contexto (tokens)',
-        'settings.profileCache': 'KV cache en RAM (MB)',
+        'settings.profileCache': 'Caché de prompts en RAM (MiB)',
         'settings.profileFlags': 'Flags extra (uno por línea)',
         'settings.profileNew': 'Nuevo',
         'settings.profileDup': 'Duplicar',
@@ -2588,6 +3117,7 @@
         'unlock.bad': 'Clave incorrecta.',
       },
       en: {
+        'nav.label': 'Main navigation',
         'nav.panel': 'Dashboard', 'nav.chat': 'Chat', 'nav.models': 'Models',
         'nav.usage': 'Usage', 'nav.logs': 'Logs', 'nav.specs': 'Specs',
         'nav.conexion': 'Connect',
@@ -2601,7 +3131,7 @@
         'strip.loading': 'Loading…', 'strip.retry': 'Retry',
         'strip.idle': 'Idle', 'strip.active': 'Running',
         'strip.starting': 'Loading…', 'strip.startError': 'Failed to start',
-        'strip.verifying': 'Verifying GPU…',
+        'strip.verifying': 'Verifying engine…',
         'strip.loadPct': 'Loading… {pct}% (ETA {eta})',
         'strip.loadSecs': 'Loading… {s}s',
         'models.fallbackName': 'model',
@@ -2639,14 +3169,16 @@
         'telemetry.title': 'Telemetry', 'telemetry.live': 'Live telemetry',
         'telemetry.tokens': 'Tokens', 'telemetry.cache': 'Cache',
         'telemetry.requests': 'Requests',
-        'telemetry.verified': 'Verified speed',
+        'telemetry.verified': 'Engine-reported decode',
+        'telemetry.requestRate': 'Completion per full request',
         'telemetry.samples': 'samples: {list} t/s',
         'telemetry.slowTitle': 'Slow engine',
         'telemetry.slowText': 'The engine loaded slowly ({median} t/s); a single restart may improve it',
+        'telemetry.slowUnavailable': 'Performance not evaluated: the engine did not report timings.',
         'telemetry.slowRestart': 'Restart engine',
-        'telemetry.gpuCheck': 'GPU check',
+        'telemetry.acceptance': 'Startup gate',
         'telemetry.genRate': 'Gen t/s',
-        'telemetry.gpuFail': 'GPU check: FAILED',
+        'telemetry.acceptanceFail': 'Startup gate failed',
         'telemetry.pidLabel': 'PID',
         'telemetry.pidActive': 'Running',
         'launch.title': 'Shortcuts',
@@ -2675,8 +3207,8 @@
         'chat.effort': 'Reasoning',
         'chat.hint': 'Press Shift + Enter for line breaks',
         'chat.hintReady': 'Ready for queries',
-        'chat.hintLoading': 'Loading tensors onto GPU...',
-        'chat.hintVerifying': 'Verifying GPU…',
+        'chat.hintLoading': 'Loading model…',
+        'chat.hintVerifying': 'Checking engine…',
         'chat.hintError': 'Engine error',
         'chat.hintIdle': 'Engine idle',
         'chat.generating': 'Generating...',
@@ -2695,12 +3227,12 @@
         'models.starterHint': 'First time? Start with a small one (2-3 GB, runs on almost any GPU), then move up to 27B if your VRAM allows it.',
         'models.starterFill': 'Fill example',
         'models.advise': 'Check fit',
-        'models.adviseTitle': 'Check if it fits your machine before downloading',
+        'models.adviseTitle': 'See the available estimate before downloading',
         'models.adviseChecking': 'Checking fit on your machine…',
         'models.advise_fits': 'Fits your GPU',
-        'models.advise_tight': 'Tight fit (KV on RAM)',
+        'models.advise_tight': 'Partial estimate',
         'models.advise_no_fit': 'Does not fit your machine',
-        'models.advise_unknown': 'No GPU data',
+        'models.advise_unknown': 'Incomplete estimate',
         'models.advise_no_gguf': 'Repo has no models',
         'models.advise_no_file': 'File not found',
         'models.searching': 'Looking for models...',
@@ -2796,13 +3328,13 @@
         'threads.quiet': '{n} threads — quiet',
         'threads.all': '{n} threads — all logical',
         'profile.fbVelLabel': 'Daily chat — fastest (32K, all in GPU)',
-        'profile.fbVelHint': 'Model and conversation memory 100% in VRAM (16 GB). Top speed (~17 t/s). For chat, questions and short code (<~30k words).',
+        'profile.fbVelHint': 'The 32K window reserves less KV memory than larger profiles. Actual VRAM use depends on the model and GPU; it does not guarantee a specific speed.',
         'profile.fbMultiLabel': 'Multi-document — several PDFs and files (64K)',
-        'profile.fbMultiHint': 'Model in VRAM + part of the KV cache in DDR5 RAM. Trades ~5% speed for ~60k words: several documents or a medium repo.',
+        'profile.fbMultiHint': 'The 64K context supports several documents or a medium repository. The RAM prompt cache does not move active KV.',
         'profile.fbLibrosLabel': 'Long books and repos — 128K context',
-        'profile.fbLibrosHint': 'Extended memory in DDR5 RAM. ~120k words (a whole book). Speed drops ~15-20% as part of the prompt travels over DDR5.',
+        'profile.fbLibrosHint': 'Supports a longer context (up to 128K). Active KV memory depends on the model and GPU; --cache-ram only limits prompt caching and does not move KV to DDR5.',
         'profile.fbMaxLabel': 'Max physical context — 262K (model limit)',
-        'profile.fbMaxHint': 'The native 262,144 tokens (~200k words). Slowest and hardest on PSU/CPU: extreme cases only.',
+        'profile.fbMaxHint': 'The largest context profile (262,144 tokens). It also needs more KV memory; use it when the model and selected GPU support that window.',
         'settings.title': 'Settings',
         'settings.sub': 'Profiles, generation, engine and notices. Engine-affecting changes apply on the next start.',
         'settings.needsNew': 'Requires the new engine version',
@@ -2816,7 +3348,7 @@
         'settings.profileDesc': 'Description',
         'settings.profileDescPh': 'What this profile is for',
         'settings.profileContext': 'Context (tokens)',
-        'settings.profileCache': 'KV cache in RAM (MB)',
+        'settings.profileCache': 'RAM prompt cache (MiB)',
         'settings.profileFlags': 'Extra flags (one per line)',
         'settings.profileNew': 'New',
         'settings.profileDup': 'Duplicate',
@@ -3229,16 +3761,35 @@
         } catch (e) {}
       }
     }
-    // Flechas izq/der en el tablist (P1-5): roving tabindex sin ratón.
+    // Flechas según la orientación visible del tablist: roving tabindex sin ratón.
     var TAB_ORDER = ['dashboard', 'chat', 'conexion', 'settings'];
+    let navIsVertical = true;
+    let navOrientationRaf = 0;
+    function syncNavOrientation() {
+      const nav = document.getElementById('main-nav');
+      if (!nav) return navIsVertical;
+      const vertical = window.getComputedStyle(nav).flexDirection === 'column';
+      nav.setAttribute('aria-orientation', vertical ? 'vertical' : 'horizontal');
+      navIsVertical = vertical;
+      return navIsVertical;
+    }
+    window.addEventListener('resize', () => {
+      if (navOrientationRaf) return;
+      navOrientationRaf = window.requestAnimationFrame(() => {
+        navOrientationRaf = 0;
+        syncNavOrientation();
+      });
+    }, { passive: true });
+    syncNavOrientation();
     function onNavKey(ev) {
       try {
         const cur = ev && ev.target && ev.target.getAttribute ? ev.target.getAttribute('data-tab') : null;
         let i = TAB_ORDER.indexOf(cur);
         if (i < 0) return;
         let next = -1;
-        if (ev.key === 'ArrowRight') next = (i + 1) % TAB_ORDER.length;
-        else if (ev.key === 'ArrowLeft') next = (i + TAB_ORDER.length - 1) % TAB_ORDER.length;
+        const vertical = navIsVertical;
+        if ((vertical && ev.key === 'ArrowDown') || (!vertical && ev.key === 'ArrowRight')) next = (i + 1) % TAB_ORDER.length;
+        else if ((vertical && ev.key === 'ArrowUp') || (!vertical && ev.key === 'ArrowLeft')) next = (i + TAB_ORDER.length - 1) % TAB_ORDER.length;
         else if (ev.key === 'Home') next = 0;
         else if (ev.key === 'End') next = TAB_ORDER.length - 1;
         else return;
@@ -3275,6 +3826,11 @@
 
     function fmtInt(n) {
       return (typeof n === 'number' && isFinite(n)) ? Math.round(n).toLocaleString() : '—';
+    }
+
+    function fmtRate(n) {
+      const rounded = Math.round(n * 10) / 10;
+      return rounded.toLocaleString(lang === 'es' ? 'es-AR' : 'en-US', { maximumFractionDigits: 1 });
     }
 
     function fmtClock(ts) {
@@ -4221,7 +4777,9 @@
         const p = document.getElementById('cfg-server-pairing');
         if (p) p.value = '';
         const b = document.getElementById('cfg-server-show');
-        if (b) b.textContent = T('settings.serverShow');
+        const label = document.getElementById('cfg-server-show-label');
+        if (label) label.textContent = T('settings.serverShow');
+        if (b) b.setAttribute('aria-pressed', 'false');
         if (pairingTimer) { clearTimeout(pairingTimer); pairingTimer = 0; }
       } catch (e) {}
     }
@@ -4233,18 +4791,24 @@
       try {
         if (pairing.type === 'password') {
           pairing.type = 'text';
-          if (btn) btn.textContent = T('settings.serverHide');
+          const label = document.getElementById('cfg-server-show-label');
+          if (label) label.textContent = T('settings.serverHide');
+          if (btn) btn.setAttribute('aria-pressed', 'true');
           if (pairingTimer) { clearTimeout(pairingTimer); pairingTimer = 0; }
           pairingTimer = setTimeout(() => {
             try {
               pairing.type = 'password';
-              if (btn) btn.textContent = T('settings.serverShow');
+              const label = document.getElementById('cfg-server-show-label');
+              if (label) label.textContent = T('settings.serverShow');
+              if (btn) btn.setAttribute('aria-pressed', 'false');
             } catch (e) {}
             pairingTimer = 0;
           }, 15000);
         } else {
           pairing.type = 'password';
-          if (btn) btn.textContent = T('settings.serverShow');
+          const label = document.getElementById('cfg-server-show-label');
+          if (label) label.textContent = T('settings.serverShow');
+          if (btn) btn.setAttribute('aria-pressed', 'false');
           if (pairingTimer) { clearTimeout(pairingTimer); pairingTimer = 0; }
         }
       } catch (e) {}
@@ -5599,11 +6163,6 @@
       const stripText = document.getElementById('strip-text');
       const stripFull = status === 'online' ? (stateText + ' :' + port) : stripStateText;
       if (stripText) stripText.textContent = stripFull;
-      // Header engine chip mirrors the strip (compact live status).
-      const hdr = document.getElementById('header-status');
-      if (hdr) hdr.className = 'header-status ' + (status === 'starting' ? 'loading' : status === 'online' ? 'online' : status === 'error' ? 'error' : 'stopped');
-      const hdrText = document.getElementById('header-status-text');
-      if (hdrText) hdrText.textContent = stripFull;
       const stripPort = document.getElementById('strip-port');
       if (stripPort) {
         stripPort.textContent = '127.0.0.1:' + port;
@@ -5654,9 +6213,9 @@
       }
       updateLauncherHint(st);
       set('chat-status-hint', chatHintText);
-      // Engine-verification telemetry (additive; blank when keys absent/null).
+      // Exact engine decode telemetry (null when the engine omits timings).
       if (typeof st.decode_tps === 'number' && isFinite(st.decode_tps)) {
-        set('tel-decode-tps', st.decode_tps.toFixed(1) + ' t/s');
+        set('tel-decode-tps', fmtRate(st.decode_tps) + ' t/s');
         show('tel-decode-box', true);
       } else {
         set('tel-decode-tps', '—');
@@ -5670,14 +6229,36 @@
         : [];
       if (samples.length >= 2) {
         const fmt1 = (v) => {
-          const r = Math.round(v * 10) / 10;
-          return (Number.isInteger(r) ? String(r) : r.toFixed(1)).replace('.', ',');
+          return fmtRate(v);
         };
         set('tel-decode-samples', T('telemetry.samples', { list: samples.map(fmt1).join(' · ') }));
         show('tel-decode-samples', true);
       } else {
         set('tel-decode-samples', '—');
         show('tel-decode-samples', false);
+      }
+      // The gate's request rate includes prompt evaluation and full request
+      // time; keep it distinct from decode throughput.
+      if (typeof st.request_tps === 'number' && isFinite(st.request_tps)) {
+        set('tel-request-tps', fmtRate(st.request_tps) + ' t/s');
+        show('tel-request-box', true);
+      } else {
+        set('tel-request-tps', '—');
+        show('tel-request-box', false);
+      }
+      const requestSamplesRaw = st.request_tps_samples;
+      const requestSamples = Array.isArray(requestSamplesRaw)
+        ? requestSamplesRaw.filter(v => typeof v === 'number' && isFinite(v))
+        : [];
+      if (requestSamples.length >= 2) {
+        const fmt1 = (v) => {
+          return fmtRate(v);
+        };
+        set('tel-request-samples', T('telemetry.samples', { list: requestSamples.map(fmt1).join(' · ') }));
+        show('tel-request-samples', true);
+      } else {
+        set('tel-request-samples', '—');
+        show('tel-request-samples', false);
       }
       // Slow-load chip: only when the backend flags this load as slow.
       // Median shown is decode_tps (rounded); hidden when absent or false.
@@ -5686,16 +6267,22 @@
           ? String(Math.round(st.decode_tps))
           : '—';
         set('tel-slow-text', T('telemetry.slowText', { median: med }));
+        show('tel-slow-restart', true);
+        show('tel-slow-box', true);
+      } else if (st.acceptance_ok === true && st.engine_slow_known !== true) {
+        set('tel-slow-text', T('telemetry.slowUnavailable'));
+        show('tel-slow-restart', false);
         show('tel-slow-box', true);
       } else {
         set('tel-slow-text', '—');
+        show('tel-slow-restart', false);
         show('tel-slow-box', false);
       }
       if (st.acceptance_ok === true) {
         set('tel-accept-status', 'OK');
         show('tel-accept-box', true);
       } else if (st.acceptance_ok === false) {
-        set('tel-accept-status', T('telemetry.gpuFail'));
+        set('tel-accept-status', T('telemetry.acceptanceFail'));
         show('tel-accept-box', true);
       } else {
         set('tel-accept-status', '—');

@@ -41,7 +41,12 @@ function makeDoc() {
     documentElement: { lang: 'es' },
   };
 }
-const mkWindow = () => ({ location: { href: '' } });
+const mkWindow = (href = 'http://127.0.0.1:8080/') => ({ location: {
+  href,
+  host: '127.0.0.1:8080',
+  hostname: '127.0.0.1',
+  protocol: 'http:'
+}, addEventListener() {}, getComputedStyle() { return { flexDirection: 'column' }; }, requestAnimationFrame(fn) { fn(); return 0; } });
 const mkStorage = () => {
   const m = new Map();
   return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k) };
@@ -67,7 +72,8 @@ const ok = (name, cond, extra = '') => {
 {
   const gids = [...new Set([...script.matchAll(/getElementById\('([^']+)'\)/g)].map(m => m[1]))];
   const ids = [...new Set([...html.matchAll(/id="([^"]+)"/g)].map(m => m[1]))];
-  const missing = gids.filter(g => !ids.includes(g));
+  const dynamicIds = [...new Set([...script.matchAll(/\.id\s*=\s*'([^']+)'/g)].map(m => m[1]))];
+  const missing = gids.filter(g => !ids.includes(g) && !dynamicIds.includes(g));
   ok('id coverage: zero missing getElementById targets', missing.length === 0, missing.length ? JSON.stringify(missing) : `${gids.length} ids / ${ids.length} present`);
   const onclicks = [...new Set([...html.matchAll(/onclick="([A-Za-z_$][\w$]*)\s*\(/g)].map(m => m[1]))];
   const fns = [...new Set([...script.matchAll(/function\s+([A-Za-z_$][\w$]*)\s*\(/g)].map(m => m[1]))];
@@ -78,6 +84,14 @@ const ok = (name, cond, extra = '') => {
   ok('single inline script block', scripts.length === 1, `blocks=${scripts.length}`);
   ok('toast region exists', html.includes('id="toast-region"'));
   ok('language selector exists', html.includes('id="lang-select"'));
+  const header = html.match(/<header>([\s\S]*?)<\/header>/)?.[1] ?? '';
+  const focusOrder = ['class="brand-section"', 'id="main-nav"', 'class="role-switch"', 'id="lang-select"']
+    .map(token => header.indexOf(token));
+  ok('sidebar focus order follows visual order at every breakpoint',
+    focusOrder.every((position, index) => position >= 0 && (index === 0 || position > focusOrder[index - 1])),
+    JSON.stringify(focusOrder));
+  ok('pairing toggle keeps its icon and translatable label span',
+    /id="cfg-server-show"[^>]*>[\s\S]*?<svg[\s\S]*?<span id="cfg-server-show-label"/.test(html));
 }
 
 const doc = makeDoc();
@@ -89,9 +103,25 @@ const strip = doc.reg.get('strip-text')?.textContent ?? '';
 ok('starting strip shows progress', strip.includes('Cargando…') && strip.includes('33%'), JSON.stringify(strip));
 
 // (ii) phase-2: verified speed
-api1.renderStatus({ status: 'running', is_healthy: true, decode_tps: 17.4, acceptance_ok: true });
+api1.renderStatus({ status: 'running', is_healthy: true, decode_tps: 17.4,
+  decode_tps_samples: [17.2, 17.4], request_tps: 5.1, request_tps_samples: [5.0, 5.1], acceptance_ok: true });
 ok('telemetry shows verified speed',
-  (doc.reg.get('tel-decode-tps')?.textContent ?? '').includes('17.4 t/s'));
+  (doc.reg.get('tel-decode-tps')?.textContent ?? '').includes('17,4 t/s'));
+ok('telemetry keeps whole-request rate separate from decode',
+  (doc.reg.get('tel-request-tps')?.textContent ?? '').includes('5,1 t/s')
+  && doc.reg.get('tel-request-box')?.style.display === '');
+api1.setLanguage('en');
+api1.renderStatus({ status: 'running', is_healthy: true, decode_tps: 17.4, request_tps: 5.1 });
+ok('telemetry rates follow the English UI locale',
+  (doc.reg.get('tel-decode-tps')?.textContent ?? '').includes('17.4 t/s')
+  && (doc.reg.get('tel-request-tps')?.textContent ?? '').includes('5.1 t/s'));
+api1.setLanguage('es');
+const requestOnlyDoc = makeDoc();
+load(script, requestOnlyDoc).renderStatus({ status: 'running', is_healthy: true,
+  request_tps: 5.1, acceptance_ok: true });
+ok('request rate does not pretend decode timing exists',
+  requestOnlyDoc.reg.get('tel-request-box')?.style.display === ''
+  && requestOnlyDoc.reg.get('tel-decode-box')?.style.display === 'none');
 
 // (iii) phase-2: no undefined/NaN leakage
 const doc2 = makeDoc();
@@ -140,6 +170,8 @@ ok('usage 404 hides card', doc5.reg.get('usage-card')?.style.display === 'none')
     esLabel === 'Iniciar Motor' && enLabel === 'Start Engine',
     JSON.stringify({ before, esLabel, enLabel }));
   ok('html lang flips to en', d.documentElement.lang === 'en', d.documentElement.lang);
+  ok('English verifying label describes the engine check',
+    a.T('strip.verifying') === 'Verifying engine…', a.T('strip.verifying'));
   a.setLanguage('es');
   ok('language flips back to es', d.documentElement.lang === 'es' && a.getLanguage() === 'es');
   a.setLanguage('en');
@@ -183,7 +215,7 @@ ok('usage 404 hides card', doc5.reg.get('usage-card')?.style.display === 'none')
   const a = load(script, d);
   a.renderStatus({ status: 'starting', verifying: true });
   const v = String(d.getElementById('strip-text').textContent ?? '');
-  ok('verifying strip shows Verificando GPU…', v.includes('Verificando GPU'), JSON.stringify(v));
+  ok('verifying strip names the engine check, not a GPU check', v.includes('Verificando motor'), JSON.stringify(v));
   a.renderStatus({ status: 'starting', starting_for_secs: 60, eta_secs: 120 });
   const s = String(d.getElementById('strip-text').textContent ?? '');
   ok('starting composition shows pct + ETA', s.includes('33%') && s.includes('ETA'), JSON.stringify(s));
@@ -470,8 +502,23 @@ ok('usage 404 hides card', doc5.reg.get('usage-card')?.style.display === 'none')
 {
   const d = makeDoc();
   const a = load(script, d);
-  a.renderStatus({ status: 'running', is_healthy: true, decode_tps: 33.5, decode_tps_samples: [30.1, 33.5, 34.0], engine_slow: false });
+  a.renderStatus({ status: 'running', is_healthy: true, acceptance_ok: true, decode_tps: 33.5, decode_tps_samples: [30.1, 33.5, 34.0], engine_slow: false, engine_slow_known: true });
   ok('warning hidden when engine_slow false', d.getElementById('tel-slow-box').style.display === 'none');
+}
+
+// ---- telemetry: missing engine timings are unknown, not fast ----
+{
+  const d = makeDoc();
+  const a = load(script, d);
+  a.renderStatus({ status: 'running', is_healthy: true, acceptance_ok: true, decode_tps: null, engine_slow: false, engine_slow_known: false });
+  const box = d.getElementById('tel-slow-box');
+  const text = String(d.getElementById('tel-slow-text').textContent ?? '');
+  const restart = d.getElementById('tel-slow-restart');
+  ok('missing engine timings render unknown status without restart', box.style.display !== 'none' && text.toLowerCase().includes('timings') && restart.style.display === 'none', JSON.stringify({ display: box.style.display, text, restart: restart.style.display }));
+  a.setLanguage('en');
+  a.renderStatus({ status: 'running', is_healthy: true, acceptance_ok: true, engine_slow_known: false });
+  const en = String(d.getElementById('tel-slow-text').textContent ?? '');
+  ok('unknown engine timing status translates to English', en.includes('not evaluated') && en.includes('timings'), JSON.stringify(en));
 }
 
 // ---- fix-sprint: opencode renders from served list ----
@@ -601,7 +648,7 @@ ok('usage 404 hides card', doc5.reg.get('usage-card')?.style.display === 'none')
     script + '\n;return { refreshVersion };');
   const run = async (ver) => {
     const dd = makeDoc();
-    const f = factory(dd, { location: { href: '' } }, mkStorage(), mkNav(), mkES, async () => { throw new Error('x'); }, () => 0, (fn) => 0, { now: () => 0 }, () => 0);
+    const f = factory(dd, mkWindow(''), mkStorage(), mkNav(), mkES, async () => { throw new Error('x'); }, () => 0, (fn) => 0, { now: () => 0 }, () => 0);
     dd.getElementById('app-version').textContent = '';
     // stub api.getVersion by pre-seeding: call the real path via fetch stub is complex;
     // instead assert the pure mapping the UI implements (app ?? version ?? local).
@@ -628,7 +675,7 @@ ok('usage 404 hides card', doc5.reg.get('usage-card')?.style.display === 'none')
     }
     throw new Error('no network: ' + url);
   };
-  const f = factory(d, { location: { href: '' } }, mkStorage(), mkNav(), mkES, versionFetch, () => 0, (fn) => 0, { now: () => 0 }, () => 0);
+  const f = factory(d, mkWindow(''), mkStorage(), mkNav(), mkES, versionFetch, () => 0, (fn) => 0, { now: () => 0 }, () => 0);
   d.getElementById('app-version').textContent = '';
   await f.refreshVersion();
   const build = String(d.getElementById('spec-engine-build').textContent ?? '');
@@ -641,7 +688,7 @@ ok('usage 404 hides card', doc5.reg.get('usage-card')?.style.display === 'none')
   // El build tampoco se inventa cuando /api/version no lo trae.
   const d2 = makeDoc();
   const noBuild = async () => ({ ok: true, json: async () => ({ app: '2.0.0' }) });
-  const f2 = factory(d2, { location: { href: '' } }, mkStorage(), mkNav(), mkES, noBuild, () => 0, (fn) => 0, { now: () => 0 }, () => 0);
+  const f2 = factory(d2, mkWindow(''), mkStorage(), mkNav(), mkES, noBuild, () => 0, (fn) => 0, { now: () => 0 }, () => 0);
   await f2.refreshVersion();
   // El mock no aplica el texto por defecto del HTML, así que "intacto" = vacío:
   // lo que importa es que no se invente un build.
