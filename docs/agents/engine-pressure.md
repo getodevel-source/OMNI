@@ -1,4 +1,9 @@
 # Protocolo de mitigación de jank (LM-NF-3)
+> **CORRECCIÓN 2026-10-11 — `--cache-ram` no controla el KV activo.** El
+> build 10743 lo define como límite de caché de prompts en RAM. Las mediciones
+> y propuestas de este documento pueden conservar sus tiempos observados, pero
+> quedan retractadas las atribuciones de memoria DDR5, offload KV o cuello de
+> bus que se basaron en ese flag. Ver `docs/engine-audit-2026-10.md`.
 
 Estado: plan + diffs preparados, SIN medir. Ventana de medición pendiente
 (la máquina está en uso por el dueño; otro worker tiene la ventana del motor).
@@ -11,13 +16,14 @@ Ryzen 5 7600 6C/12T. Argv común: `-ngl 99 -ctk q4_0 -ctv q4_0 -a localmind
 --reuse-port -t <threads> -tb <threads_batch> --prio 2 -b 1024 -ub 512
 --device Vulkan0 --split-mode none --host 127.0.0.1 --port <dyn> -np 1
 --poll 0 --prio-batch 0 -fa on --metrics` + spec draft-mtp (n=2, p-split 0,1)
-+ `--reasoning-preserve` + `--cache-reuse 256` (el motor lo desactiva:
-`cache_reuse is not supported by this context`, inerte hoy).
++ `--reasoning-preserve`. El TOML conserva `cache_reuse = 256`, pero OMNI no
+lo agrega al argv. El build 10683 lo rechazaba en este contexto; la ayuda del
+10743 ya ofrece la opción, pendiente de prueba viva con Qwen3.8.
 
 | Palanca | 32K `velocidad` | 64K `multi_doc` | 128K `libros` | 262K `max_contexto` | Costo en escritorio |
 |---|---|---|---|---|---|
 | `-c` contexto | 32768 | 65536 | 131072 | 262144 | KV lineal con `-c`; a 128K+ cruza el bus |
-| `--cache-ram` (MB KV en RAM) | 0 | 4096 | **6144** | 6144 (+`-kvu`) | 128K = ~6 GB en DDR5; cada token decode viaja por el bus + commit de RAM |
+| `--cache-ram` (MiB de caché de prompts) | 0 | 4096 | **6144** | 6144 (+`-kvu`) | Valores históricos: limitan caché de prompts; no colocan el KV en DDR5. Los perfiles integrados actuales migran a 0 en v6. |
 | `-t` threads (default TOML `threads=None` → `num_cpus`=6) | 6 | 6 | 6 | 6 | **6 = todos los físicos**: prefill satura el CPU, nada libre para el desktop |
 | `-tb` threads_batch (`limit_threads_batch=true` → `min(threads,4)`) | 4 | 4 | 4 | 4 | Pico de prefill algo acotado; 4+2 hilos siguen siendo casi todo el CPU |
 | `-b 1024` / `-ub 512` | fijos | fijos | fijos | fijos | **PSU-LOCKED: no tocar** (picos de potencia/VRAM) |

@@ -1,4 +1,9 @@
 # Comparativa de harnesses a 128K (OpenCode, DeepSeek, Pi, OMP)
+> **CORRECCIÓN 2026-10-11 — `--cache-ram` no controla el KV activo.** El
+> build 10743 lo define como límite de caché de prompts en RAM. Las mediciones
+> y propuestas de este documento pueden conservar sus tiempos observados, pero
+> quedan retractadas las atribuciones de memoria DDR5, offload KV o cuello de
+> bus que se basaron en ese flag. Ver `docs/engine-audit-2026-10.md`.
 
 ## Estado del documento
 

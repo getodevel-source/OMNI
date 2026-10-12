@@ -180,8 +180,11 @@ async function main() {
         check(sawEta, "load2: eta_secs from stored duration", `stored=${JSON.stringify(lt).slice(0, 160)}`);
       } catch (e) { check(false, "load2: eta_secs from stored duration", String(e).slice(0, 120)); }
     }
-    check(st.status === "running" && st.acceptance_ok === true && (st.decode_tps || 0) > 3,
-      `load${load}: gate passes`, `status=${st.status} ok=${st.acceptance_ok} tps=${st.decode_tps} ctx=${st.context}`);
+    check(st.status === "running" && st.acceptance_ok === true
+      && Number.isFinite(st.request_tps) && st.request_tps >= 3,
+      `load${load}: gate passes`, `status=${st.status} ok=${st.acceptance_ok} request_tps=${st.request_tps} decode_tps=${st.decode_tps} ctx=${st.context}`);
+    check(st.decode_tps == null || (Number.isFinite(st.decode_tps) && st.decode_tps > 0),
+      `load${load}: native decode timing is valid when present`, `decode_tps=${st.decode_tps}`);
     check(st.context === CONTEXT, `load${load}: pinned context honored`, `context=${st.context} want=${CONTEXT}`);
     if (st.status !== "running") { console.log(`ABORT: engine ${st.status}: ${(st.last_error || "").slice(0, 300)}`); return 1; }
     if (load === 1) {

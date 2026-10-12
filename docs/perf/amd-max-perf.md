@@ -1,4 +1,9 @@
 # Guía de Máximo Rendimiento para AMD Radeon RX 6800 XT en Vulkan (Windows 11)
+> **CORRECCIÓN 2026-10-11 — `--cache-ram` no controla el KV activo.** El
+> build 10743 lo define como límite de caché de prompts en RAM. Las mediciones
+> y propuestas de este documento pueden conservar sus tiempos observados, pero
+> quedan retractadas las atribuciones de memoria DDR5, offload KV o cuello de
+> bus que se basaron en ese flag. Ver `docs/engine-audit-2026-10.md`.
 
 **LocalMind Performance Engineering**  
 **Fecha:** 2026-09-28  
@@ -234,7 +239,7 @@ Para no malgastar ventanas de prueba ni poner en riesgo la estabilidad del equip
 * **La Realidad:** Las opciones de offload de expertos solo aplican a modelos Mixture-of-Experts (MoE) como Mixtral o DeepSeek. Qwen3.8-27B y LFM2.5 son modelos **densos**. El flag es completamente inerte.
 
 ### 8. Reintentar `--cache-reuse`
-* **La Realidad:** Ya fue medido en 4 combinaciones distintas (`src-rust/src/config.rs:119-125`). El build 10683 rechaza explícitamente el flag con `cache_reuse is not supported by this context`. La reutilización de prefijos ya funciona nativamente mediante `--cache-prompt`.
+* **La Realidad:** El build 10683 rechazó el flag en cuatro combinaciones (`src-rust/src/config.rs`, evidencia histórica). La ayuda del build 10743 ya ofrece `--cache-reuse` con default 0. OMNI todavía no lo envía y falta medirlo con Qwen3.8 en el contexto real; la reutilización nativa de prefijos ya funciona mediante `--cache-prompt`, así que no se debe activarlo sin A/B y control de calidad.
 
 ### 9. Aplicar `-kvu` en contextos largos para modelos densos
 * **La Realidad:** Medido en la prueba A/B de `docs/agents/engine-pressure.md` §11: a igualdad de contexto (128K) y prompt (15k tokens), `-kvu` rindió **-8 % en prefill** (154,7 t/s vs 168,0 t/s) y aumentó el commit de RAM en 3 puntos porcentuales, sin ganancia alguna en decode.

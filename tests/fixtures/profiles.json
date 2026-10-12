@@ -1,36 +1,42 @@
 [
-  {
-    "id": "velocidad",
-    "name": "Velocidad máxima · 32K contextos cortos",
-    "description": "Todo el modelo y su memoria de conversación (KV cache) viven en los 16 GB de la GPU. Es el modo más rápido: ~17 t/s. Ideal para chat, preguntas y código corto (sesiones de menos de ~30k palabras).",
-    "context": 32768,
-    "cache_ram": 0,
-    "extra_flags": []
-  },
-  {
-    "id": "multi_doc",
-    "name": "Multi-documento · 64K (velocidad levemente menor)",
-    "description": "El modelo vive en VRAM y parte del KV cache pasa a RAM DDR5. Renuncia ~5% de velocidad para sostener ~60k palabras de contexto: varios documentos o un repo de código mediano en la misma conversación.",
-    "context": 65536,
-    "cache_ram": 4096,
-    "extra_flags": []
-  },
-  {
-    "id": "libros",
-    "name": "Libros largos · 128K contexto extendido",
-    "description": "Modelo intacto en VRAM + KV cache ampliado en RAM DDR5: sostiene ~120k palabras (un libro entero, un repo mediano). La velocidad de respuesta baja ~15-20% frente a Velocidad máxima porque parte de la memoria del prompt viaja por DDR5.",
-    "context": 131072,
-    "cache_ram": 6144,
-    "extra_flags": []
-  },
-  {
-    "id": "max_contexto",
-    "name": "Máximo contexto · 262K (límite físico del modelo)",
-    "description": "Alcanza los 262,144 tokens que el modelo soporta nativamente (~200k palabras: biblia, code bases enormes). El más lento y el que más tensiona CPU/PSU: úsalo solo cuando necesites sujetar la obra completa en una sola conversación.",
-    "context": 262144,
-    "cache_ram": 6144,
-    "extra_flags": [
-      "-kvu"
-    ]
-  }
+    {
+        "id":  "velocidad",
+        "name":  "Velocidad máxima · 32K contextos cortos",
+        "description":  "Contexto de 32K. La caché de prompts en RAM está desactivada; esto no cambia dónde se aloja el KV activo.",
+        "context":  32768,
+        "cache_ram":  0,
+        "extra_flags":  [
+
+                        ]
+    },
+    {
+        "id":  "multi_doc",
+        "name":  "Multi-documento · 64K (velocidad levemente menor)",
+        "description":  "Contexto de 64K para varios documentos o repositorios. La caché de prompts en RAM está desactivada; esto no mueve el KV activo fuera de la VRAM.",
+        "context":  65536,
+        "cache_ram":  0,
+        "extra_flags":  [
+
+                        ]
+    },
+    {
+        "id":  "libros",
+        "name":  "Libros largos · 128K contexto extendido",
+        "description":  "Contexto de 128K para libros o proyectos grandes. La caché de prompts en RAM está desactivada; esto no mueve el KV activo fuera de la VRAM.",
+        "context":  131072,
+        "cache_ram":  0,
+        "extra_flags":  [
+
+                        ]
+    },
+    {
+        "id":  "max_contexto",
+        "name":  "Máximo contexto · 262K (límite físico del modelo)",
+        "description":  "Contexto nativo de 262144 tokens. La memoria del KV activo depende del modelo y del dispositivo; la caché de prompts en RAM no lo desborda.",
+        "context":  262144,
+        "cache_ram":  0,
+        "extra_flags":  [
+                            "-kvu"
+                        ]
+    }
 ]

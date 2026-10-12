@@ -2,7 +2,10 @@
 // LocalMind pressure sampler (Node ESM, no dependencies).
 // Samples every 5 s for a given duration and writes JSONL: free/committed RAM,
 // page-file usage, CPU total + llama-server.exe CPU/RAM, GPU engine
-// utilization, and gen_tps from /api/metrics when the app answers.
+// utilization, Windows per-adapter/per-engine GPU memory, and gen_tps from
+// /api/metrics when the app answers. GPU memory counters report MiB converted
+// from Windows performance-counter bytes; clocks/power/temperature are not
+// exposed by these generic counters and are not inferred.
 // Starts nothing itself: run ALONGSIDE a harness run.
 //
 // Usage: node tests/pressure-sampler.mjs --duration 600 [--out <file>]
@@ -38,49 +41,35 @@ function resolveKey() {
 }
 const KEY = resolveKey();
 
-function psCsv() {
-  // One lightweight snapshot: Name,PID,CPU(s),WorkingSet(bytes) for all procs.
+// Collect Windows telemetry in one PowerShell process. The previous sampler
+// spawned separate shells for CPU, memory, GPU engine, and VRAM on every tick;
+// their startup overhead made the nominal 5 s sampling interval inaccurate.
+function windowsSample() {
+  const script = [
+    "$os=Get-CimInstance Win32_OperatingSystem",
+    "$corePaths=@('\\Memory\\% Committed Bytes In Use','\\Paging File(_Total)\\% Usage','\\Processor(_Total)\\% Processor Time')",
+    "$core=(Get-Counter -Counter $corePaths -SampleInterval 1 -MaxSamples 1).CounterSamples",
+    "$gpu=@(); try{$gpuPaths=@('\\GPU Engine(*)\\Utilization Percentage','\\GPU Adapter Memory(*)\\Dedicated Usage','\\GPU Adapter Memory(*)\\Shared Usage','\\GPU Process Memory(*)\\Dedicated Usage','\\GPU Process Memory(*)\\Shared Usage');$gpu=(Get-Counter -Counter $gpuPaths -MaxSamples 1).CounterSamples}catch{}",
+    "$proc=Get-Process -Name 'llama-server' -ErrorAction SilentlyContinue | Select-Object -First 1",
+    "$comm=$core | Where-Object {$_.Path -like '*% Committed Bytes In Use'} | Select-Object -First 1",
+    "$page=$core | Where-Object {$_.Path -like '*% Usage'} | Select-Object -First 1",
+    "$cpu=$core | Where-Object {$_.Path -like '*% Processor Time'} | Select-Object -First 1",
+    "$mem=@('FreeMB='+[math]::Round($os.FreePhysicalMemory/1KB)+' TotalMB='+[math]::Round($os.TotalVisibleMemorySize/1KB),'CommittedPct='+[math]::Round($comm.CookedValue,1),'PagePct='+[math]::Round($page.CookedValue,1),'CpuPct='+[math]::Round($cpu.CookedValue,1))",
+    "$gpuTop=@($gpu | Where-Object {$_.Path -like '*GPU Engine*'} | Sort-Object CookedValue -Descending | Select-Object -First 3 | ForEach-Object {$_.InstanceName+'='+[math]::Round($_.CookedValue,1)})",
+    "$adapters=@{};$engineMemory=@{};$prefix='';$enginePid=$null;if($proc){$prefix='pid_'+$proc.Id+'_';$enginePid=$proc.Id}",
+    "foreach($s in $gpu){$scope=$null;if($s.Path -like '*GPU Adapter Memory*'){$scope=$adapters}elseif($s.Path -like '*GPU Process Memory*' -and $proc -and $s.InstanceName.StartsWith($prefix)){$scope=$engineMemory}else{continue};$kind=if($s.Path -like '*Dedicated Usage'){'dedicated'}else{'shared'};if(!$scope.ContainsKey($s.InstanceName)){$scope[$s.InstanceName]=@{luid=$s.InstanceName}};$scope[$s.InstanceName][$kind+'_mb']=[math]::Round([double]$s.CookedValue/1MB,1)}",
+    "$gpuMemory=[ordered]@{engine_pid=$enginePid;adapters=@($adapters.Values);engine=@($engineMemory.Values)}",
+    "$llama=$null;if($proc){$llama=[ordered]@{pid=$proc.Id;cpu_s=$proc.CPU;working_set_mb=[math]::Round($proc.WorkingSet64/1MB,0)}}",
+    "[ordered]@{mem=$mem;gpu_top3=$gpuTop;gpu_memory=$gpuMemory;llama_server=$llama} | ConvertTo-Json -Compress -Depth 5",
+  ].join(";");
   try {
-    const out = execSync(
-      'powershell.exe -NoProfile -Command "Get-Process | Select-Object Name,Id,CPU,WorkingSet64 | ConvertTo-Csv -NoTypeInformation"',
-      { timeout: 20000, windowsHide: true }
-    ).toString("utf8");
-    return out;
+    const out = execSync(`powershell.exe -NoProfile -Command "${script}"`, {
+      timeout: 20000,
+      windowsHide: true,
+    }).toString("utf8");
+    return JSON.parse(out.trim());
   } catch {
-    return "";
-  }
-}
-
-function memCounters() {
-  const grab = (script) => {
-    try {
-      const out = execSync(`powershell.exe -NoProfile -Command "${script}"`, {
-        timeout: 20000,
-        windowsHide: true,
-      }).toString("utf8");
-      return out.trim().split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-    } catch {
-      return [];
-    }
-  };
-  const os = grab(
-    "$o=Get-CimInstance Win32_OperatingSystem; 'FreeMB='+[math]::Round($o.FreePhysicalMemory/1KB)+' TotalMB='+[math]::Round($o.TotalVisibleMemorySize/1KB)"
-  );
-  const com = grab("(Get-Counter '\\Memory\\% Committed Bytes In Use').CounterSamples|ForEach-Object{'CommittedPct='+[math]::Round($_.CookedValue,1)}");
-  const pg = grab("(Get-Counter '\\Paging File(_Total)\\% Usage').CounterSamples|ForEach-Object{'PagePct='+[math]::Round($_.CookedValue,1)}");
-  const cpu = grab("(Get-Counter '\\Processor(_Total)\\% Processor Time' -SampleInterval 1 -MaxSamples 1).CounterSamples|ForEach-Object{'CpuPct='+[math]::Round($_.CookedValue,1)}");
-  return [...os, ...com, ...pg, ...cpu];
-}
-
-function gpuTop() {
-  try {
-    const out = execSync(
-      `powershell.exe -NoProfile -Command "(Get-Counter '\\GPU Engine(*)\\Utilization Percentage').CounterSamples | Sort-Object CookedValue -Descending | Select-Object -First 3 InstanceName,CookedValue | ForEach-Object{$_.InstanceName + '=' + [math]::Round($_.CookedValue,1)}"`,
-      { timeout: 20000, windowsHide: true }
-    ).toString("utf8");
-    return out.trim().split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-  } catch {
-    return [];
+    return null;
   }
 }
 
@@ -108,20 +97,15 @@ let n = 0;
 while (Date.now() < end) {
   const t0 = Date.now();
   const rec = { ts: new Date().toISOString(), n: n++ };
-  rec.mem = memCounters();
-  rec.gpu_top3 = gpuTop();
+  const win = windowsSample();
+  rec.mem = win?.mem ?? [];
+  rec.gpu_top3 = win?.gpu_top3 ?? [];
+  rec.gpu_memory = win?.gpu_memory ?? null;
+  rec.llama_server = win?.llama_server ?? null;
   const m = await metrics();
   rec.gen_tps = m && typeof m.gen_tps === "number" ? m.gen_tps : null;
   rec.cached = m && typeof m.prompt_tokens_cached === "number" ? m.prompt_tokens_cached : null;
   rec.requests_processing = m && typeof m.requests_processing === "number" ? m.requests_processing : null;
-  // llama-server.exe CPU/RAM from one CSV snapshot (cheap parse, no per-proc calls).
-  try {
-    const csv = psCsv().split(/\r?\n/);
-    for (const line of csv) {
-      const low = line.toLowerCase();
-      if (low.includes("llama-server")) rec.llama_server = line.trim();
-    }
-  } catch {}
   appendFileSync(OUT, JSON.stringify(rec) + "\n");
   const spent = Date.now() - t0;
   const wait = 5000 - spent;

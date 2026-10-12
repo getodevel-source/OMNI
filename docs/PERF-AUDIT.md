@@ -42,7 +42,7 @@ Verificado contra `llama-server --help` (build 10743) + docs master:
   El default upstream (`--warmup`) calentaría dos veces. ✓
 - `poll = 0` en TOML: el motor no spinea en reposo. ✓
 - `--jinja` presente (requisito para tool-calling y Responses nativo). ✓
-- `--cache-ram`, `--spec-*`, `-ctk/-ctv` disponibles; KV en `q4_0`.
+- `--cache-ram` limita la caché de prompts en RAM; no ubica el KV activo. `--spec-*` y `-ctk/-ctv` disponibles; el KV se fija en `q4_0`.
 
 ## Hallazgo grande: translate.rs BORRADO (ejecutado y verificado en vivo)
 
