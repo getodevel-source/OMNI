@@ -6,6 +6,12 @@ Todos los cambios publicables de la app. El formato sigue
 
 ## [Unreleased]
 
+## [2.1.3] - 2026-10-12
+
+### Mejorado
+- El icono de OMNI queda incrustado en el ejecutable de Windows para que el
+  Explorador, la barra de tareas y los accesos directos muestren el logo.
+
 ## [2.1.2] - 2026-10-12
 
 ### Corregido
