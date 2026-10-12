@@ -6,6 +6,65 @@ Todos los cambios publicables de la app. El formato sigue
 
 ## [Unreleased]
 
+## [2.1.2] - 2026-10-12
+
+### Corregido
+- El prechequeo de VRAM deja de tratar `cache_ram` como offload del KV y calcula
+  KV Q4_0 sólo cuando GGUF y dispositivo aportan datos compatibles. El cálculo
+  avisa en vez de bloquear y se declara desconocido cuando hay flags extra.
+- `--cache-ram` se describe como límite de caché de prompts; los overrides del
+  tipo KV quedan bloqueados para mantener q4_0.
+- Los textos de perfiles ya no prometen spill a DDR5 ni una penalización de
+  velocidad sin una medición que lo respalde.
+- La migración v7 actualiza nombres y descripciones heredados de perfiles
+  integrados cuando coinciden exactamente con textos anteriores conocidos;
+  conserva los textos personalizados.
+- La puerta de arranque separa su tasa de request completa de decode nativo,
+  termina el cronómetro tras leer la respuesta y ya no se presenta como chequeo
+  de GPU. La señal de lentitud sólo usa decode informado por llama.cpp; si
+  faltan timings, la interfaz lo indica como una medición no disponible.
+- El cooldown y el tope horario de arranques se persisten; un historial dañado
+  o que no puede escribirse bloquea nuevas cargas. Los timestamps futuros se
+  normalizan al momento actual sin perder un cooldown completo.
+- La escritura del historial persistente ya no retiene su mutex durante la
+  operación de disco.
+- Antes de detener el motor existente, el arranque comprueba la RAM física libre
+  frente al GGUF, el límite de caché de prompts y el margen de Windows; la falta
+  de RAM medida devuelve 400 sin lanzar otro proceso.
+- El benchmark ahora incluye una tarea visible fija después del relleno, registra
+  si cada respuesta llega al marcador `READY` (sin guardar el texto generado) y
+  rechaza métricas A/B si alguna variante se queda en razonamiento sin respuesta
+  visible. La tarea y el marcador quedan en los metadatos del resultado.
+- El benchmark añade `ram-cache-churn`: precalienta el prompt medido, desplaza el
+  slot activo con otro prompt y mide la reutilización del caché en host RAM. Esto
+  permite aislar `--cache-ram` de la reutilización del prefijo en el slot activo;
+  las comparaciones también muestran `cached_prompt_tokens`.
+- `GET /api/config` expone una huella SHA-256 de los ajustes efectivos del motor
+  y sólo el conteo de flags extra; el comparador la exige para impedir A/B con
+  cambios inadvertidos en polling, batch, dispositivo, energía o flags ocultas.
+- La huella runtime también cubre métricas, configuración de `mmproj` y perfiles
+  ordenados por id, para que el comparador detecte todos los cambios efectivos.
+- El arranque resuelve perfil, modelo, contexto y `mmproj` desde una sola captura
+  de configuración y comprueba la RAM antes de detener el motor que ya funciona.
+- Las consultas de RAM y dispositivos al motor tienen tiempo límite. La
+  estimación de VRAM queda como desconocida si hay un `mmproj` activo o flags
+  extra que pueden cambiar la asignación de memoria.
+- El parser del benchmark distingue la respuesta JSON completa de los eventos
+  SSE y tolera etiquetas futuras en las líneas de memoria de dispositivos.
+- Los analizadores de flags de carga y caché no consumen la opción siguiente
+  cuando falta un valor; los bloqueos de seguridad ocurren antes de detener el
+  motor activo y las muestras SSE conservan el último decode válido.
+- Los controles de idioma y emparejamiento conservan sus etiquetas e iconos; el
+  orden del foco sigue el orden visual en escritorio y móvil.
+- El benchmark acepta perfiles A/B personalizados con etiqueta de contexto
+  estable; verifica su configuración y rechaza comparaciones con modelo, build,
+  contexto, profundidad de entrada o flags de perfil distintos.
+- El benchmark resume las corridas repetidas con medianas y conserva cada
+  muestra cruda. El comparador valida profundidad y marcador `READY` en todas
+  las muestras y comprueba que cada mediana guardada coincide con sus datos.
+
+## [Unreleased]
+
 ## [2.1.1] - 2026-10-11
 
 ### Corregido
