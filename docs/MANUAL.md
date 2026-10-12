@@ -47,20 +47,24 @@ Checklist: busca tu caso y haz lo indicado.
    estados (Gen t/s, PID/Activo), botones y avisos cambian de idioma,
    incluido el sufijo «(copia)» al duplicar perfiles.
 
-### ¿Qué tamaño cabe en mi VRAM?
+### ¿Qué se puede estimar antes de descargar?
 
-El botón **Evaluar** (`POST /api/models/advise`, `src-rust/src/models.rs:344`)
-decide así: presupuesto = 90 % de la VRAM; `fits` = peso + KV 32K (~1 GB)
-dentro del presupuesto (perfil `velocidad`); `tight` = el peso cabe pero el
-KV desborda a RAM (perfiles `multi_doc`/`libros`, ~5-20 % menos t/s);
-`no_fit` = ni con RAM de respaldo alcanza (prueba Q3_K_M/IQ3_XS o 7-8B).
-Sin dato de VRAM no inventa (`unknown`): el guard avisa al arrancar.
+El botón **Evaluar** (`POST /api/models/advise`) solo recibe el tamaño del GGUF
+publicado en Hugging Face. No conoce sus metadatos de arquitectura, el contexto
+que se usará ni la memoria libre del adaptador seleccionado, así que devuelve
+`unknown` y explica cuánto ocupan los pesos frente a un presupuesto de
+referencia. No interpreta que el modelo no pueda arrancar: llama.cpp puede dejar
+parte de las capas en CPU.
 
-| Modelo (ejemplo) | Peso aprox. | 8 GB VRAM | 16 GB VRAM | 24 GB VRAM |
-|---|---|---|---|---|
-| Qwen2.5-1.5B (para empezar, ~2 GB) | ~2 GB | cabe | cabe | cabe |
-| 7-8B Q4 | ~4-5 GB | cabe | cabe | cabe |
-| Qwen3.8-27B Q4 (~14 GB) | ~14 GB | no cabe | ajustado (KV en RAM) | cabe |
+Después de descargar, el arranque intenta estimar pesos + KV `q4_0` con los
+metadatos GGUF y la memoria libre del dispositivo elegido. La estimación solo
+cubre arquitecturas densas reconocidas; si faltan datos, lo indica. Un exceso es
+una advertencia y el motor intenta cargar, porque puede repartir capas en CPU.
+La puerta posterior comprueba que el servidor responda.
+
+`cache_ram` configura la caché de prompts del servidor en RAM. El valor `0` la
+desactiva. Esa caché no mueve el KV activo a RAM ni permite ampliar el contexto;
+los perfiles integrados la dejan apagada mientras se valida su comportamiento.
 
 ## Actualización automática
 

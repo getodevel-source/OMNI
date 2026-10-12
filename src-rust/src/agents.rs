@@ -609,6 +609,7 @@ mod tests {
             engine_slow: false,
             acceptance_ok: None,
             acceptance_error: None,
+            ..Default::default()
         };
         assert!(!engine_live(&st));
         assert!(engine_down_error(&st).contains("motor_apagado"));

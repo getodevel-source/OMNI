@@ -1,7 +1,7 @@
 use parking_lot::{Mutex, RwLock};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Write};
 use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
@@ -11,7 +11,6 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use crate::config::ConfigStore;
-use crate::config::HardwareProfile;
 use crate::engine_gate::{
     engine_lost, eta_secs, gate_is_slow, load_key, should_auto_stop, vram_total_mb, vram_used_mb,
 };
@@ -47,10 +46,16 @@ pub struct ServerStatus {
     pub starting_for_secs: u64,
     #[serde(default)]
     pub eta_secs: u64,
+    /// Completion tokens por segundo dividido por el tiempo total de la
+    /// solicitud de aceptación. Incluye prefill y no es decode puro.
+    #[serde(default)]
+    pub request_tps: Option<f64>,
+    #[serde(default)]
+    pub request_tps_samples: Vec<f64>,
+    /// Tasa de decode que informa `timings.predicted_per_second` del motor.
     #[serde(default)]
     pub decode_tps: Option<f64>,
-    /// Las 2 muestras de la puerta (mínimo en `decode_tps`, conservador);
-    /// vacías si no hubo puerta en este arranque. Para que la UI vea la dispersión.
+    /// Muestras de decode puro; vacías si el motor no informa timings.
     #[serde(default)]
     pub decode_tps_samples: Vec<f64>,
     /// true si el mínimo de la puerta quedó bajo `[engine] slow_gate_tps`
@@ -58,6 +63,9 @@ pub struct ServerStatus {
     /// `El motor cargó lento (N t/s); puede mejorarse reiniciándolo una vez`.
     #[serde(default)]
     pub engine_slow: bool,
+    /// false indica que el motor no informó `timings`; no equivale a rápido.
+    #[serde(default)]
+    pub engine_slow_known: bool,
     #[serde(default)]
     pub acceptance_ok: Option<bool>,
     #[serde(default)]
@@ -79,13 +87,36 @@ impl Default for ServerStatus {
             verifying: false,
             starting_for_secs: 0,
             eta_secs: 0,
+            request_tps: None,
+            request_tps_samples: Vec::new(),
             decode_tps: None,
             decode_tps_samples: Vec::new(),
             engine_slow: false,
+            engine_slow_known: false,
             acceptance_ok: None,
             acceptance_error: None,
         }
     }
+}
+
+fn engine_slow_assessment(decode_tps: Option<f64>, threshold: f64) -> (bool, bool) {
+    decode_tps
+        .map(|tps| (true, gate_is_slow(tps, threshold)))
+        .unwrap_or((false, false))
+}
+
+#[derive(Debug, Clone, Copy)]
+struct AcceptanceSample {
+    request_tps: f64,
+    decode_tps: Option<f64>,
+}
+
+#[derive(Debug)]
+struct AcceptanceGateResult {
+    request_tps: f64,
+    request_tps_samples: Vec<f64>,
+    decode_tps: Option<f64>,
+    decode_tps_samples: Vec<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -105,8 +136,8 @@ pub struct HardwareInfo {
     /// del usuario). `None` si no se puede estimar.
     #[serde(default)]
     pub cpu_physical: Option<usize>,
-    /// RAM total del sistema en MB (best-effort, WMI): para dimensionar KV
-    /// desbordado a RAM. `None` sin dato.
+    /// RAM total del sistema en MB (best-effort, WMI); dato informativo, no se
+    /// usa para afirmar que el KV activo se desborda a RAM. `None` sin dato.
     #[serde(default)]
     pub ram_total_mb: Option<u64>,
     /// VRAM total dedicada en MB (máximo entre GPUs dedicadas, best-effort):
@@ -172,6 +203,10 @@ pub struct ProcessManager {
     log_file: PathBuf,
     /// Historial de arranques (epoch secs) para cooldown + tope horario (LM-NF-3).
     start_history: Arc<Mutex<Vec<u64>>>,
+    /// El guard sobrevive cierres/reinicios de OMNI; un historial ilegible
+    /// bloquea el arranque en vez de resetear silenciosamente el límite.
+    start_history_file: PathBuf,
+    start_history_load_error: Option<String>,
     /// Reintento MTP ya consumido en el arranque vigente (una sola vez).
     mtp_retry_done: Arc<AtomicBool>,
     config: Arc<ConfigStore>,
@@ -210,6 +245,17 @@ impl ProcessManager {
         let bin_dir = base_dir.join("bin");
         let models_dir = base_dir.join("models");
 
+        let start_history_file = config
+            .path()
+            .parent()
+            .unwrap_or(&base_dir)
+            .join("start-history.json");
+        let (history, start_history_load_error) =
+            match load_start_history(&start_history_file, unix_now_secs()) {
+                Ok(history) => (history, None),
+                Err(error) => (Vec::new(), Some(error)),
+            };
+
         let cfg = config.get();
         let status = Arc::new(RwLock::new(ServerStatus {
             status: "stopped".to_string(),
@@ -224,9 +270,12 @@ impl ProcessManager {
             verifying: false,
             starting_for_secs: 0,
             eta_secs: 0,
+            request_tps: None,
+            request_tps_samples: Vec::new(),
             decode_tps: None,
             decode_tps_samples: Vec::new(),
             engine_slow: false,
+            engine_slow_known: false,
             acceptance_ok: None,
             acceptance_error: None,
         }));
@@ -239,7 +288,7 @@ impl ProcessManager {
         let last_activity = Arc::new(AtomicU64::new(0));
         let start_instant: Arc<Mutex<Option<Instant>>> = Arc::new(Mutex::new(None));
         let start_epoch = Arc::new(AtomicU64::new(0));
-        let start_history: Arc<Mutex<Vec<u64>>> = Arc::new(Mutex::new(Vec::new()));
+        let start_history: Arc<Mutex<Vec<u64>>> = Arc::new(Mutex::new(history));
         let mtp_retry_done = Arc::new(AtomicBool::new(false));
         let pending_start: Arc<Mutex<Option<ResolvedStart>>> = Arc::new(Mutex::new(None));
         let start_lock: Arc<Mutex<()>> = Arc::new(Mutex::new(()));
@@ -340,8 +389,14 @@ impl ProcessManager {
                         st.verifying = false;
                         st.starting_for_secs = 0;
                         st.eta_secs = 0;
+                        st.request_tps = None;
+                        st.request_tps_samples = Vec::new();
+                        st.decode_tps = None;
                         st.decode_tps_samples = Vec::new();
                         st.engine_slow = false;
+                        st.engine_slow_known = false;
+                        st.acceptance_ok = None;
+                        st.acceptance_error = None;
                         crash_notify = Some((
                             "El motor falló".to_string(),
                             summary,
@@ -443,10 +498,7 @@ impl ProcessManager {
                         // Puerta de aceptación (D1): una sola vez por arranque, sin el lock
                         // cogido durante la request de verificación (el status sigue legible).
                         // CI (`-D warnings`): el alias no compensa para un local de 1 uso.
-                        #[allow(clippy::type_complexity)]
-                        let mut gate_outcome: Option<
-                            Result<(f64, u64, Vec<f64>), String>,
-                        > = None;
+                        let mut gate_outcome: Option<Result<AcceptanceGateResult, String>> = None;
                         if is_ok && current_status == "starting" && !gate_done {
                             gate_done = true;
                             let my_epoch = seen_epoch;
@@ -469,7 +521,9 @@ impl ProcessManager {
                             st.is_healthy = is_ok;
                             if let Some(outcome) = gate_outcome {
                                 match outcome {
-                                    Ok((tps, _tokens, samples)) => {
+                                    Ok(gate_result) => {
+                                        let request_tps = gate_result.request_tps;
+                                        let decode_tps = gate_result.decode_tps;
                                         // Verificación de contexto real (cinturón:
                                         // el motor dice `n_ctx` en `/props`).
                                         // Si difiere del pedido → `error` en
@@ -489,18 +543,23 @@ impl ProcessManager {
                                             st.verifying = false;
                                             st.starting_for_secs = 0;
                                             st.eta_secs = 0;
-                                            st.decode_tps = Some(tps);
-                                            st.decode_tps_samples = samples.clone();
-                                            st.engine_slow = gate_is_slow(
-                                                tps,
-                                                crate::engine_gate::slow_threshold(
-                                                    cfg_poll.get().engine.slow_gate_tps,
-                                                    Self::model_size_gb(
-                                                        &models_dir_poll,
-                                                        &st.model,
+                                            st.request_tps = Some(request_tps);
+                                            st.request_tps_samples =
+                                                gate_result.request_tps_samples.clone();
+                                            st.decode_tps = decode_tps;
+                                            st.decode_tps_samples =
+                                                gate_result.decode_tps_samples.clone();
+                                            (st.engine_slow_known, st.engine_slow) =
+                                                engine_slow_assessment(
+                                                    decode_tps,
+                                                    crate::engine_gate::slow_threshold(
+                                                        cfg_poll.get().engine.slow_gate_tps,
+                                                        Self::model_size_gb(
+                                                            &models_dir_poll,
+                                                            &st.model,
+                                                        ),
                                                     ),
-                                                ),
-                                            );
+                                                );
                                             st.acceptance_ok = Some(false);
                                             st.acceptance_error = Some(msg.clone());
                                             st.last_error = Some(msg.clone());
@@ -527,22 +586,36 @@ impl ProcessManager {
                                             st.verifying = false;
                                             st.starting_for_secs = 0;
                                             st.eta_secs = 0;
-                                            st.decode_tps = Some(tps);
-                                            st.decode_tps_samples = samples.clone();
+                                            st.request_tps = Some(request_tps);
+                                            st.request_tps_samples =
+                                                gate_result.request_tps_samples.clone();
+                                            st.decode_tps = decode_tps;
+                                            st.decode_tps_samples =
+                                                gate_result.decode_tps_samples.clone();
                                             // engine_slow: solo informativo, sin
                                             // reintentos (LM-NF-3 lo prohíbe).
-                                            st.engine_slow = gate_is_slow(tps, slow_at);
+                                            (st.engine_slow_known, st.engine_slow) =
+                                                engine_slow_assessment(decode_tps, slow_at);
                                             st.acceptance_ok = Some(true);
                                             st.acceptance_error = None;
                                             st.last_error = None;
-                                            pending_ok_log = Some(format!("[LocalMind] Verificación de arranque OK: {} t/s (mínimo de {})", tps.round() as u64, samples.len()));
-                                            // Aviso P20: motor listo con modelo y velocidad.
+                                            let decode_note = decode_tps
+                                                .map(|tps| format!("decode {:.1} t/s", tps))
+                                                .unwrap_or_else(|| {
+                                                    "decode no reportado".to_string()
+                                                });
+                                            pending_ok_log = Some(format!(
+                                                "[LocalMind] Puerta de arranque OK: request {:.1} t/s; {}; {} muestra(s).",
+                                                request_tps,
+                                                decode_note,
+                                                gate_result.request_tps_samples.len()
+                                            ));
+                                            // Aviso P20: motor listo, con decode solo si el motor lo reportó.
                                             pending_notify = Some((
                                                 "Motor listo".to_string(),
                                                 format!(
-                                                    "«{}» cargando en la GPU ({} t/s)",
-                                                    st.model,
-                                                    tps.round() as u64
+                                                    "«{}» respondió; request {:.1} t/s; {}.",
+                                                    st.model, request_tps, decode_note
                                                 ),
                                                 "engine-ready".to_string(),
                                             ));
@@ -554,8 +627,12 @@ impl ProcessManager {
                                         st.verifying = false;
                                         st.starting_for_secs = 0;
                                         st.eta_secs = 0;
+                                        st.request_tps = None;
+                                        st.request_tps_samples = Vec::new();
+                                        st.decode_tps = None;
                                         st.decode_tps_samples = Vec::new();
                                         st.engine_slow = false;
+                                        st.engine_slow_known = false;
                                         st.acceptance_error = Some(detail.clone());
                                         st.last_error = Some(detail.clone());
                                         // Aviso P20: fallo de la puerta con el motivo.
@@ -721,6 +798,8 @@ impl ProcessManager {
             load_times,
             log_file,
             start_history,
+            start_history_file,
+            start_history_load_error,
             mtp_retry_done,
             pending_start,
             import_lock,
@@ -845,9 +924,10 @@ impl ProcessManager {
         if engine.reasoning_preserve {
             cmd.arg("--reasoning-preserve");
         }
-        if profile.cache_ram > 0 {
-            cmd.args(["--cache-ram", &profile.cache_ram.to_string()]);
-        }
+        // P29: `--cache-ram` limita la caché de prompts en RAM de llama-server;
+        // no ubica ni desborda el KV activo. Hay que pasar también 0 porque el
+        // default del binario la habilita (8192 MiB); omitir el flag no la apaga.
+        cmd.args(["--cache-ram", &profile.cache_ram.to_string()]);
         for flag in &profile.extra_flags {
             cmd.arg(flag);
         }
@@ -1005,10 +1085,10 @@ impl ProcessManager {
 
     /// Línea de arranque del log. D-44: describe lo que se PASA, no lo que se
     /// configuró. Antes anunciaba `cache-reuse: <n>` leyendo
-    /// `engine.cache_reuse`, pero `--cache-reuse` está deliberadamente
-    /// descartado (el build lo rechaza en este contexto) y nunca llega al
-    /// hijo: el log describía un argv que el proceso no recibió. Se quita la
-    /// afirmación en vez de inventar un valor.
+    /// `engine.cache_reuse`, pero `--cache-reuse` no se anexa al argv: el build
+    /// 10683 lo rechazó en este contexto y el 10743 aún no se ha validado en
+    /// vivo con Qwen3.8. El log describía un argv que el proceso no recibió.
+    /// Se quita la afirmación en vez de inventar un valor.
     ///
     /// El contexto y los hilos sí son verdad (van como `-c`/`-t`), igual que
     /// el puerto (`--port`) y el uBatch (`-ub`).
@@ -1067,31 +1147,36 @@ impl ProcessManager {
         preferred
     }
 
-    /// Puerta de aceptación (D1): una completion real que prueba velocidad GPU.
+    /// Puerta de aceptación (D1): una completion real que prueba que el motor
+    /// responde y supera el mínimo de tasa por solicitud completa. El resultado
+    /// conserva esa tasa aparte de decode puro, si el motor informa timings.
+    /// No identifica qué dispositivo ejecutó el modelo.
     /// Nunca paniquea: todo fallo se devuelve como `Err(detalle)` en español.
     /// La puerta usa `temperature: 0` FIJO a propósito (determinista): aunque
     /// `[generation]` (P16) exponga otra temperatura para el chat, la puerta no
-    /// la consume. Calienta con 1 request desechable y reporta el MÍNIMO de
-    /// 2 muestras (auditoría: con warmup previo la dispersión medida es ±1,5%,
-    /// así que el mínimo equivale a la mediana y ahorra ~8 s por arranque; el
-    /// mínimo además peca de precavido: ante degradación real falla antes que
-    /// una mediana. La bimodalidad en frío la absorbe el warmup, no las muestras).
-    fn run_acceptance_gate(port: u16) -> Result<(f64, u64, Vec<f64>), String> {
+    /// la consume. Calienta con 1 request desechable y toma hasta 2 muestras.
+    /// El mínimo de dos muestras válidas es una cota conservadora para la tasa
+    /// de request; las tasas de decode se resumen solo si `timings` existe.
+    fn run_acceptance_gate(port: u16) -> Result<AcceptanceGateResult, String> {
         // Calentamiento desechable (mismo path de chat, pocos tokens): estabiliza
         // la primera medida. Solo en la puerta; con el motor en `running` no
         // hay re-calentamiento (la puerta solo corre en starting).
         let _ = Self::gate_sample(port, 16);
-        // 2 muestras iguales; `gate_median` con 2 devuelve el mínimo
-        // (cota inferior, conservador). Veredicto en `decode_tps`.
-        let mut samples = Vec::new();
+        let mut request_samples = Vec::new();
+        let mut decode_samples = Vec::new();
         let mut last_err = String::new();
         for _ in 0..2 {
             match Self::gate_sample(port, 200) {
-                Ok((tps, _)) => samples.push(tps),
+                Ok(sample) => {
+                    request_samples.push(sample.request_tps);
+                    if let Some(tps) = sample.decode_tps {
+                        decode_samples.push(tps);
+                    }
+                }
                 Err(e) => last_err = e,
             }
         }
-        if samples.is_empty() {
+        if request_samples.is_empty() {
             return Err(if last_err.is_empty() {
                 "El modelo no respondió durante la verificación de arranque (sin usage válido)."
                     .to_string()
@@ -1099,14 +1184,17 @@ impl ProcessManager {
                 last_err
             });
         }
-        let median = gate_median(&samples).unwrap_or(0.0);
-        Ok((median, 0, samples))
+        Ok(AcceptanceGateResult {
+            request_tps: gate_median(&request_samples).unwrap_or(0.0),
+            request_tps_samples: request_samples,
+            decode_tps: gate_median(&decode_samples),
+            decode_tps_samples: decode_samples,
+        })
     }
 
-    /// Una muestra de la puerta: `(t/s, completion_tokens)` o detalle en
-    /// español. El veredicto (≥20 tokens, ≥3 t/s) lo aplica el llamador sobre
-    /// la mediana, no aquí.
-    fn gate_sample(port: u16, max_tokens: u32) -> Result<(f64, u64), String> {
+    /// Una muestra de la puerta separa completion tokens / request total de
+    /// `timings.predicted_per_second`, que es decode informado por llama.cpp.
+    fn gate_sample(port: u16, max_tokens: u32) -> Result<AcceptanceSample, String> {
         let url = format!("http://127.0.0.1:{}/v1/chat/completions", port);
         let body = serde_json::json!({
             "messages": [{"role": "user", "content": "Count from 1 to 60. Nothing else."}],
@@ -1122,7 +1210,6 @@ impl ProcessManager {
             )
             .timeout(Duration::from_secs(120))
             .send_json(body);
-        let elapsed_ms = start.elapsed().as_millis().max(1) as u64;
         let resp = match resp {
             Ok(r) => r,
             Err(e) => {
@@ -1132,7 +1219,18 @@ impl ProcessManager {
                 ))
             }
         };
-        let text = resp.into_string().unwrap_or_default();
+        let text = match resp.into_string() {
+            Ok(text) => text,
+            Err(e) => {
+                return Err(format!(
+                    "El modelo no respondió durante la verificación de arranque (no se pudo leer la respuesta: {}).",
+                    e
+                ));
+            }
+        };
+        // ureq devuelve Response al recibir cabeceras; el cuerpo aún se lee aquí.
+        // El cronómetro debe incluir la generación completa, no sólo el TTFT.
+        let elapsed_ms = start.elapsed().as_millis().max(1) as u64;
         if text.is_empty() {
             return Err(
                 "El modelo no respondió durante la verificación de arranque (respuesta vacía)."
@@ -1141,13 +1239,16 @@ impl ProcessManager {
         }
         match parse_usage(&text) {
             Some((_, completion)) => match acceptance_verdict(completion, elapsed_ms) {
-                Ok(tps) => Ok((tps, completion)),
+                Ok(request_tps) => Ok(AcceptanceSample {
+                    request_tps,
+                    decode_tps: parse_engine_decode_tps(&text),
+                }),
                 Err(kind) if kind == "tokens" => Err(format!(
                     "El modelo no respondió durante la verificación de arranque (solo {} completion tokens).",
                     completion
                 )),
                 Err(_) => Err(format!(
-                    "El motor respondió a {} t/s (velocidad de CPU): la GPU no se está usando.",
+                    "La puerta obtuvo {} completion tokens por segundo de solicitud completa; queda debajo del mínimo de 3.",
                     completion.saturating_mul(1000) / elapsed_ms.max(1)
                 )),
             },
@@ -1304,13 +1405,14 @@ impl ProcessManager {
             .unwrap_or_else(|_| format!("CPU x86_64 ({} hilos)", cpu_cores));
 
         let mut gpus = Vec::new();
+        let mut device_vram_total_mb = None;
+        let selected_device = self.config.get().engine.device;
         let llama_bin = self.bin_dir.join("llama-server.exe");
         if llama_bin.exists() {
-            let mut cmd = Command::new(&llama_bin);
-            cmd.arg("--list-devices");
-            cmd.creation_flags(CREATE_NO_WINDOW);
-            if let Ok(output) = cmd.output() {
-                let text = String::from_utf8_lossy(&output.stdout);
+            if let Some(text) = crate::engine_gate::llama_device_list(&llama_bin) {
+                device_vram_total_mb =
+                    crate::engine_gate::parse_llama_device_memory(&text, &selected_device)
+                        .map(|memory| memory.total_mb);
                 for line in text.lines() {
                     let line = line.trim();
                     if line.contains(':') && !line.starts_with("Available") {
@@ -1364,7 +1466,7 @@ impl ProcessManager {
             gpus,
             cpu_physical: physical_cores(cpu_cores),
             ram_total_mb: ram_total_mb(),
-            vram_total_mb: crate::engine_gate::vram_total_mb(),
+            vram_total_mb: device_vram_total_mb.or_else(crate::engine_gate::vram_total_mb),
         }
     }
     /// Importar un `.gguf` a `models/` con `overwrite` opt-in. Delega la
@@ -1422,9 +1524,13 @@ impl ProcessManager {
         self.log_file.clone()
     }
 
+    #[cfg(test)]
     pub fn list_models(&self) -> Vec<ModelInfo> {
         let cfg = self.config.get();
-        let aliases: Vec<String> = cfg.engine.aliases.clone();
+        self.list_models_with_aliases(&cfg.engine.aliases)
+    }
+
+    fn list_models_with_aliases(&self, aliases: &[String]) -> Vec<ModelInfo> {
         let mut models = Vec::new();
         if let Ok(entries) = std::fs::read_dir(&self.models_dir) {
             for entry in entries.flatten() {
@@ -1471,9 +1577,8 @@ impl ProcessManager {
         models
     }
 
-    /// Elegir mmproj: first match de la lista de candidatos (o ninguno si auto=false).
-    fn find_mmproj(&self) -> Option<PathBuf> {
-        let cfg = self.config.get();
+    /// Elegir mmproj desde la misma foto de config usada por el arranque.
+    fn find_mmproj(&self, cfg: &crate::config::AppConfig) -> Option<PathBuf> {
         if !cfg.mmproj.auto {
             return None;
         }
@@ -1497,6 +1602,14 @@ impl ProcessManager {
         let _guard = self.start_lock.try_lock().ok_or_else(|| {
             "Ya hay un arranque en curso: esperá a que termine antes de reintentar.".to_string()
         })?;
+        if let Some(error) = &self.start_history_load_error {
+            let msg = format!(
+                "Protección de energía: no se pudo leer el historial de arranques; se bloquea este inicio ({})",
+                error
+            );
+            self.log(&format!("[LocalMind] {}", msg));
+            return Err(msg);
+        }
         // Intento nuevo = pizarra de error limpia, y se limpia AL ABRIRLO, no
         // solo al lograrse (el `= None` de más abajo, tras el `spawn()`): una
         // validación rechazada devuelve ANTES de `stop()` y del `spawn()`, así
@@ -1530,53 +1643,151 @@ impl ProcessManager {
         // NOMBRADOS; omitidos resuelven por la precedencia habitual. Va ANTES
         // del guardarraíl para no consumir cooldown/tope con un typo.
         let cfg = self.config.get();
-        {
-            let valid_ids: Vec<String> = cfg.profiles.iter().map(|p| p.id.clone()).collect();
-            validate_req_profile(req.profile.as_deref(), &valid_ids)?;
-            validate_req_context(req.context)?;
-            let models = self.list_models();
-            let filenames: Vec<String> = models.iter().map(|m| m.filename.clone()).collect();
-            let names: Vec<String> = models.iter().map(|m| m.name.clone()).collect();
-            let rels: Vec<String> = models
-                .iter()
-                .filter_map(|m| {
-                    std::path::Path::new(&m.path)
-                        .strip_prefix(self.models_dir.clone())
-                        .ok()
-                        .map(|r| r.to_string_lossy().replace('\\', "/"))
-                })
-                .collect();
-            let mut known_models = filenames;
-            known_models.extend(names);
-            known_models.extend(rels);
-            validate_req_model(
-                req.model.as_deref(),
-                &known_models,
-                &[],
-                &cfg.engine.aliases,
-            )?;
+        let valid_ids: Vec<String> = cfg.profiles.iter().map(|p| p.id.clone()).collect();
+        validate_req_profile(req.profile.as_deref(), &valid_ids)?;
+        validate_req_context(req.context)?;
+        let models = self.list_models_with_aliases(&cfg.engine.aliases);
+        let filenames: Vec<String> = models.iter().map(|m| m.filename.clone()).collect();
+        let names: Vec<String> = models.iter().map(|m| m.name.clone()).collect();
+        let rels: Vec<String> = models
+            .iter()
+            .filter_map(|m| {
+                std::path::Path::new(&m.path)
+                    .strip_prefix(self.models_dir.clone())
+                    .ok()
+                    .map(|r| r.to_string_lossy().replace('\\', "/"))
+            })
+            .collect();
+        let mut known_models = filenames;
+        known_models.extend(names);
+        known_models.extend(rels);
+        validate_req_model(
+            req.model.as_deref(),
+            &known_models,
+            &[],
+            &cfg.engine.aliases,
+        )?;
+
+        // Rechazar falta de RAM antes de detener un motor que ya sirve
+        // peticiones. El mínimo estima páginas/buffers del GGUF para mmap
+        // y conserva 2 GiB para Windows. Solo opciones conocidas que
+        // retienen pesos en CPU reservan el GGUF completo. `-kvu` y
+        // `--cache-ram` no se confunden con ubicación de pesos: el segundo
+        // es un tope de crecimiento posterior del prompt cache.
+        let profile = if let Some(id) = req.profile.as_ref().filter(|s| !s.is_empty()) {
+            crate::config::resolve_profile(&cfg.profiles, id)
+        } else if let Some(last) = cfg.last.profile.as_ref().filter(|s| !s.is_empty()) {
+            crate::config::resolve_profile(&cfg.profiles, last)
+        } else {
+            cfg.profiles.first().cloned().unwrap_or_else(|| {
+                crate::config::resolve_profile(&cfg.profiles, crate::config::DEFAULT_PROFILE_ID)
+            })
+        };
+        let profile_id = profile.id.clone();
+        let power_safe_on = cfg.engine.power_safe;
+        let model_filename = resolve_model_filename(
+            req.model.as_deref(),
+            &cfg.engine.aliases,
+            &models,
+            cfg.last.model.as_deref(),
+            &self.models_dir,
+        )?;
+        let model_path = resolve_model_path(&self.models_dir, &model_filename)?;
+        let req_profile_opt = req
+            .profile
+            .as_ref()
+            .filter(|s| !s.is_empty())
+            .map(|s| s.as_str());
+        let context = resolve_context(
+            req.context,
+            req_profile_opt,
+            profile.context,
+            cfg.last.profile.as_deref(),
+            cfg.last.model.as_deref(),
+            cfg.last.context,
+            &profile.id,
+            &model_filename,
+        );
+        let mmproj_path = self.find_mmproj(&cfg);
+        let model_mb = std::fs::metadata(&model_path)
+            .map_err(|e| {
+                format!("No se pudo leer el tamaño del GGUF para el prechequeo de RAM: {e}")
+            })?
+            .len()
+            .div_ceil(1024 * 1024);
+        let all_extra_flags: Vec<String> = profile
+            .extra_flags
+            .iter()
+            .chain(cfg.engine.extra_flags.iter())
+            .cloned()
+            .collect();
+        // Rechazar opciones inseguras antes de detener el motor actual. La
+        // comprobación vuelve a usar la misma foto de perfil y engine que
+        // resolverá el comando de arranque.
+        if let Some(flag) = crate::config::cache_type_override_flag(&all_extra_flags) {
+            let err = format!(
+                "Flag bloqueada: «{}» intenta cambiar el tipo KV fijo q4_0.",
+                flag
+            );
+            self.log(&err);
+            return Err(err);
+        }
+        if let Some(err) = crate::config::psu_unsafe_flag(&all_extra_flags) {
+            self.log(&err);
+            return Err(err);
+        }
+        let host_load_mode = crate::engine_gate::host_model_load_mode(&all_extra_flags);
+        let prompt_cache_mb = crate::engine_gate::effective_prompt_cache_mb(
+            &all_extra_flags,
+            profile.cache_ram as u64,
+        );
+        if let Some(available_mb) = crate::engine_gate::available_ram_mb() {
+            match crate::engine_gate::check_host_ram_fit(
+                    model_mb,
+                    host_load_mode,
+                    available_mb,
+                ) {
+                    crate::engine_gate::HostRamFit::Fits {
+                        free_mb,
+                        required_mb,
+                    } => self.log(&format!(
+                        "[LocalMind] RAM previa suficiente: {} MiB libres; mínimo de inicio estimado {} MiB (GGUF {} MiB; modo de carga: {}; margen Windows: 2048 MiB). Límite de caché de prompts: {} MiB; puede crecer durante el uso.",
+                        free_mb,
+                        required_mb,
+                        model_mb,
+                        match host_load_mode {
+                            crate::engine_gate::HostModelLoadMode::Mmap => "auto/mmap",
+                            crate::engine_gate::HostModelLoadMode::NoMmap => "sin mmap/direct IO",
+                            crate::engine_gate::HostModelLoadMode::HostResident => "pesos en host",
+                        },
+                        prompt_cache_mb
+                    )),
+                    crate::engine_gate::HostRamFit::Insufficient {
+                        free_mb,
+                        required_mb,
+                    } => {
+                        let msg = format!(
+                            "Inicio bloqueado por protección de RAM: hay {} MiB disponibles y el mínimo estimado para este modo de carga es {} MiB (incluye 2 GiB para Windows). La caché de prompts puede crecer después del arranque y el uso KV depende del contexto y la VRAM.",
+                            free_mb, required_mb
+                        );
+                        self.log(&msg);
+                        return Err(msg);
+                    }
+                }
+        } else {
+            self.log("[LocalMind] No se pudo consultar la RAM física libre; continúa el prechequeo sin esa estimación.");
         }
         // Guardarraíles de energía (LM-NF-3): cooldown + tope horario + modo
         // seguro. Cada arranque lee ~13 GB a VRAM (el transitorio más grande
         // del sistema); se evalúan ANTES de tocar el motor en marcha.
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
+        let now = unix_now_secs();
         if let Err(wait) = check_start_guard(
             cfg.engine.start_cooldown_secs,
             cfg.engine.max_starts_per_hour,
             &mut self.start_history.lock(),
             now,
         ) {
-            let msg = if wait.cooldown_left > 0 {
-                format!(
-                    "Arranque demasiado pronto: esperá {} s antes de reintentar (protección de energía).",
-                    wait.cooldown_left
-                )
-            } else {
-                "Límite de arranques por hora alcanzado (protección de energía): reintentá más tarde.".to_string()
-            };
+            let msg = start_guard_error(wait);
             self.log(&msg);
             return Err(msg);
         }
@@ -1585,98 +1796,72 @@ impl ProcessManager {
         // Brief delay to allow Windows to clear any TIME_WAIT TCP sockets
         thread::sleep(Duration::from_millis(150));
 
-        let cfg = self.config.get();
-        let engine = &cfg.engine;
-        // Perfil: request > config.last > config.profiles
-        let profile: HardwareProfile =
-            if let Some(id) = req.profile.as_ref().filter(|s| !s.is_empty()) {
-                crate::config::resolve_profile(&cfg.profiles, id)
-            } else if let Some(last) = cfg.last.profile.as_ref().filter(|s| !s.is_empty()) {
-                crate::config::resolve_profile(&cfg.profiles, last).clone()
-            } else {
-                cfg.profiles.first().cloned().unwrap_or_else(|| {
-                    crate::config::resolve_profile(&cfg.profiles, crate::config::DEFAULT_PROFILE_ID)
-                        .clone()
-                })
-            };
         // `profile_id` es siempre un id real (resuelto arriba): nunca se
         // persiste ni se expone el fantasma (D-1) aunque el request o el TOML
         // traigan un id desconocido.
-        let profile_id = profile.id.clone();
         // Modo seguro (LM-NF-3, SIN restringir contexto: el dueño trabaja
         // siempre en 128K-262K). El aviso de 262K se emite tras resolver el
         // contexto real (ver `power_note_262k` abajo).
-        let power_safe_on = engine.power_safe;
-        let models = self.list_models();
-        let model_filename = resolve_model_filename(
-            req.model.as_deref(),
-            &engine.aliases,
-            &models,
-            cfg.last.model.as_deref(),
-            &self.models_dir,
-        )?;
-
-        // Acepta el basename plano (histórico) o el `rel` de /api/models
-        // (`sub/model.gguf`); rechaza `..`, absolutas y escapes de models/.
-        let model_path = resolve_model_path(&self.models_dir, &model_filename)?;
-        // Precedencia de contexto: request explícito > perfil explícito > última
-        // sesión (solo si coincide perfil+modelo) > contexto del perfil resuelto.
-        let req_profile_opt = req
-            .profile
-            .as_ref()
-            .filter(|s| !s.is_empty())
-            .map(|s| s.as_str());
-        let context = resolve_context(
-            req.context,
-            req_profile_opt,
-            profile.context,
-            cfg.last.profile.as_deref(),
-            cfg.last.model.as_deref(),
-            cfg.last.context,
-            &profile.id,
-            &model_filename,
-        );
-        // Guard de VRAM (portabilidad): un tercero con 8 GB que pida un 27B
-        // (~14 GB) lo descubre por OOM si no se avisa. Se estima
-        // `modelo + KV(contexto resuelto)` contra la VRAM total; si no hay
-        // dato de VRAM (sin nvidia-smi ni WMI válido), NO se bloquea: sin dato
-        // no hay veredicto. El error nombra GB concretos. Va tras el contexto
-        // porque el KV depende del contexto resuelto, no del pedido.
-        if let Err(e) = crate::engine_gate::check_vram_fit(
-            &model_path,
-            context,
-            profile.cache_ram,
-            crate::engine_gate::vram_total_mb(),
-        ) {
-            self.log(&e);
-            return Err(e);
+        // Estimación best-effort con el GGUF y la memoria libre del dispositivo
+        // elegido. `--cache-ram` no interviene: limita la caché de prompts en RAM.
+        // Es una advertencia, no un bloqueo: llama.cpp puede dejar capas en CPU;
+        // la puerta posterior comprueba que el servidor realmente responda.
+        let llama_bin = self.bin_dir.join("llama-server.exe");
+        let device_memory = crate::engine_gate::llama_device_memory(&llama_bin, &cfg.engine.device);
+        // Las flags extra se anexan después de los argumentos controlados y
+        // podrían cambiar modelo, contexto, dispositivo u offload. `-kvu` no
+        // cambia el tamaño de los pesos ni el KV q4_0 estimado; el resto deja
+        // la estimación en desconocido.
+        let estimate_is_complete =
+            crate::engine_gate::vram_estimate_is_complete(&all_extra_flags, mmproj_path.is_some());
+        let estimate = if !estimate_is_complete && mmproj_path.is_some() {
+            crate::engine_gate::VramFit::Unknown(
+                "Hay un mmproj activo y esta estimación solo contempla los pesos GGUF y el KV.",
+            )
+        } else if !estimate_is_complete {
+            crate::engine_gate::VramFit::Unknown(
+                "Hay flags extra que pueden cambiar la asignación efectiva de memoria.",
+            )
+        } else {
+            crate::engine_gate::estimate_vram_fit(
+                &model_path,
+                context,
+                device_memory.map(|memory| memory.free_mb),
+            )
+        };
+        match estimate {
+            crate::engine_gate::VramFit::Fits {
+                model_mb,
+                kv_mb,
+                required_mb,
+                free_mb,
+            } => {
+                self.log(&format!("[LocalMind] Estimación VRAM {}: pesos ~{} MiB + KV q4_0 ~{} MiB = ~{} MiB; {} informa {} MiB libres.", cfg.engine.device, model_mb, kv_mb, required_mb, cfg.engine.device, free_mb));
+            }
+            crate::engine_gate::VramFit::Exceeds {
+                model_mb,
+                kv_mb,
+                required_mb,
+                free_mb,
+            } => {
+                self.log(&format!("[LocalMind] Aviso VRAM {}: pesos ~{} MiB + KV q4_0 ~{} MiB = ~{} MiB frente a {} MiB libres. Se deja continuar porque el motor puede repartir capas en CPU.", cfg.engine.device, model_mb, kv_mb, required_mb, free_mb));
+            }
+            crate::engine_gate::VramFit::Unknown(reason) => {
+                self.log(&format!(
+                    "[LocalMind] Estimación VRAM no disponible: {}",
+                    reason
+                ));
+            }
         }
-        // Precedencia de contexto: request explícito > perfil explícito > última
-        // sesión (solo si coincide perfil+modelo) > contexto del perfil resuelto.
-        let req_profile_opt = req
-            .profile
-            .as_ref()
-            .filter(|s| !s.is_empty())
-            .map(|s| s.as_str());
-        let context = resolve_context(
-            req.context,
-            req_profile_opt,
-            profile.context,
-            cfg.last.profile.as_deref(),
-            cfg.last.model.as_deref(),
-            cfg.last.context,
-            &profile.id,
-            &model_filename,
-        );
         let threads = req
             .threads
             .clone()
             .filter(|s| !s.is_empty())
             .map(|s| {
                 s.parse::<usize>()
-                    .unwrap_or_else(|_| cfg.engine.threads.unwrap_or_else(num_cpus))
+                    .unwrap_or_else(|_| cfg.engine.threads.unwrap_or_else(default_engine_threads))
             })
-            .unwrap_or_else(|| cfg.engine.threads.unwrap_or_else(num_cpus));
+            .unwrap_or_else(|| cfg.engine.threads.unwrap_or_else(default_engine_threads));
         let threads_batch = cfg
             .engine
             .threads_batch
@@ -1733,32 +1918,12 @@ impl ProcessManager {
         // ser el argv del hijo, que es justo lo que lo hace evidencia.
         // No se reimplementan aquí: la fuente única es `build_engine_cmd`.
         //
-        // `--cache-reuse` NO se pasa: el build 10683 lo rechaza en este
-        // contexto (`cache_reuse is not supported by this context`, medido
-        // 2026-09-27 en 4 combinaciones: mínimo/-kvu/-np2/--cache-prompt) y la
-        // reutilización de prefijo ya funciona sin él (ver comentario en
-        // `cache_reuse` en config.rs). Campo conservado para la API/compat.
+        // `--cache-reuse` NO se pasa: 10683 lo rechazó en este contexto,
+        // mientras que 10743 ya lo ofrece; falta validar su efecto con Qwen3.8
+        // y este tamaño de contexto. Mantenerlo fuera del argv evita cambiar el
+        // motor antes de tener una comparación A/B (ver `config.rs`).
 
-        // Candado PSU (LM-NF-3): ni el perfil ni el engine global pueden subir
-        // `-ub`/`-b`/spec por config. La función nombra la flag ofensora.
-        //
-        // D-47: la INSPECCIÓN se queda aquí, donde estaba, aunque ya no se
-        // anexe nada después. El orden es deliberado: la lista se valida sobre
-        // `all_extra` ANTES de que ninguna de esas flags llegue al comando. Se
-        // conserva esa propiedad (el candado corre antes del `spawn()` de abajo
-        // y devuelve `Err` sin lanzar el proceso), y lo que se elimina es solo
-        // el segundo `cmd.arg()`: las flags ya iban anexadas dentro de
-        // `build_engine_cmd`, así que el candado igual inspeccionaba antes de
-        // que el hijo las viera.
-        let mut all_extra: Vec<String> = Vec::new();
-        all_extra.extend(profile.extra_flags.iter().cloned());
-        all_extra.extend(cfg.engine.extra_flags.iter().cloned());
-        if let Some(err) = crate::config::psu_unsafe_flag(&all_extra) {
-            self.log(&err);
-            return Err(err);
-        }
-
-        if let Some(mm) = self.find_mmproj() {
+        if let Some(mm) = mmproj_path.as_ref() {
             let mm_arg = mm.to_string_lossy().to_string();
             cmd.args(["--mmproj", mm_arg.as_str()]);
         }
@@ -1776,6 +1941,37 @@ impl ProcessManager {
             self.log("Contexto 262K: consumo y picos más altos; arranques limitados (cooldown 120 s + tope 4/hora). Para liberar VRAM usá Stop manual.");
         }
         self.log("================================================================");
+
+        // Persistir ANTES de crear el hijo: si OMNI cae justo después del
+        // spawn, el siguiente proceso debe seguir viendo este arranque. El
+        // segundo chequeo usa el instante real del spawn y el write atómico
+        // falla cerrado; nunca se carga el modelo sin actualizar el guard.
+        let start_now = unix_now_secs();
+        {
+            let mut history = self.start_history.lock();
+            if let Err(wait) = check_start_guard(
+                cfg.engine.start_cooldown_secs,
+                cfg.engine.max_starts_per_hour,
+                &mut history,
+                start_now,
+            ) {
+                let msg = start_guard_error(wait);
+                self.log(&msg);
+                return Err(msg);
+            }
+            let mut next_history = history.clone();
+            drop(history);
+            record_start(&mut next_history, start_now);
+            if let Err(error) = persist_start_history(&self.start_history_file, &next_history) {
+                let msg = format!(
+                    "Protección de energía: no se pudo guardar el historial; el motor no se inició ({})",
+                    error
+                );
+                self.log(&format!("[LocalMind] {}", msg));
+                return Err(msg);
+            }
+            *self.start_history.lock() = next_history;
+        }
 
         let mut child = cmd
             .spawn()
@@ -1859,7 +2055,7 @@ impl ProcessManager {
             priority: priority.clone(),
             process_priority_class,
             llama_port,
-            mmproj: self.find_mmproj(),
+            mmproj: mmproj_path.clone(),
         });
         {
             let mut st = self.status.write();
@@ -1883,9 +2079,12 @@ impl ProcessManager {
                 stored,
                 Self::model_size_gb(&self.models_dir, &model_filename),
             );
+            st.request_tps = None;
+            st.request_tps_samples = Vec::new();
             st.decode_tps = None;
             st.decode_tps_samples = Vec::new();
             st.engine_slow = false;
+            st.engine_slow_known = false;
             st.acceptance_ok = None;
         }
         *self.start_instant.lock() = Some(Instant::now());
@@ -1894,8 +2093,6 @@ impl ProcessManager {
         // Sembrar el timer de inactividad al arrancar (D-20): sin esto
         // `last_activity` queda en 0 y el auto-stop por inactividad no dispara nunca.
         self.touch_activity();
-        // Registrar el arranque para cooldown + tope horario (LM-NF-3).
-        record_start(&mut self.start_history.lock(), now);
         // Persistir "última configuración usada" para el próximo arranque.
         self.config.update(|c| {
             c.last = crate::config::LastSettings {
@@ -1932,15 +2129,21 @@ impl ProcessManager {
         st.verifying = false;
         st.starting_for_secs = 0;
         st.eta_secs = 0;
+        st.request_tps = None;
+        st.request_tps_samples = Vec::new();
+        st.decode_tps = None;
         st.decode_tps_samples = Vec::new();
         st.engine_slow = false;
+        st.engine_slow_known = false;
+        st.acceptance_ok = None;
+        st.acceptance_error = None;
         *self.start_instant.lock() = None;
         // Invalida cualquier puerta de aceptación en curso (D1).
         self.start_epoch.fetch_add(1, Ordering::Relaxed);
         // El próximo arranque tiene su propio reintento MTP disponible.
         self.mtp_retry_done.store(false, Ordering::Relaxed);
         *self.pending_start.lock() = None;
-        self.log("[LocalMind] Servidor detenido. 100% de VRAM y memoria liberada.");
+        self.log("[LocalMind] Proceso del motor detenido y finalizado.");
     }
 }
 
@@ -1954,6 +2157,17 @@ fn num_cpus() -> usize {
     std::thread::available_parallelism()
         .map(|n| n.get())
         .unwrap_or(6)
+}
+
+/// Por defecto se usan núcleos físicos estimados, no todos los hilos lógicos.
+/// La carga del prompt es costosa en RAM/CPU y el límite anterior duplicaba
+/// hilos en equipos con SMT (p. ej. Ryzen 6C/12T), aunque la UI documentaba 6.
+fn default_engine_threads() -> usize {
+    default_engine_threads_from_logical(num_cpus())
+}
+
+fn default_engine_threads_from_logical(logical: usize) -> usize {
+    physical_cores(logical).unwrap_or(6)
 }
 
 /// Núcleos físicos estimados (portabilidad): la mayoría x86 trae SMT×2, así
@@ -2000,6 +2214,93 @@ pub struct StartGuardWait {
     pub cooldown_left: u64,
 }
 
+const START_HISTORY_MAX_ENTRIES: usize = 64;
+const START_HISTORY_MAX_BYTES: u64 = 4096;
+
+fn unix_now_secs() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+fn start_guard_error(wait: StartGuardWait) -> String {
+    if wait.cooldown_left > 0 {
+        format!(
+            "Arranque demasiado pronto: esperá {} s antes de reintentar (protección de energía).",
+            wait.cooldown_left
+        )
+    } else {
+        "Límite de arranques por hora alcanzado (protección de energía): reintentá más tarde."
+            .to_string()
+    }
+}
+
+/// Leer el guard persistente. Un archivo inválido no se interpreta como una
+/// ventana vacía: eso convertiría una corrupción en permiso para arrancar.
+fn load_start_history(path: &Path, now: u64) -> Result<Vec<u64>, String> {
+    let raw = match std::fs::read(path) {
+        Ok(raw) => raw,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => {
+            return Err(format!("lectura fallida: {}", error));
+        }
+    };
+    if raw.len() as u64 > START_HISTORY_MAX_BYTES {
+        return Err("archivo excede el tamaño esperado".to_string());
+    }
+    let mut history: Vec<u64> =
+        serde_json::from_slice(&raw).map_err(|error| format!("contenido inválido: {}", error))?;
+    if history.len() > START_HISTORY_MAX_ENTRIES {
+        return Err("contiene más entradas de las permitidas".to_string());
+    }
+    let had_future_timestamp = history.iter().any(|timestamp| *timestamp > now);
+    for timestamp in &mut history {
+        *timestamp = (*timestamp).min(now);
+    }
+    history.retain(|timestamp| now - *timestamp < 3600);
+    if had_future_timestamp {
+        // Un reloj atrasado o un valor corrupto no debe bloquear arranques
+        // hasta una fecha arbitraria. Normalizar a `now` conserva el cooldown
+        // completo y deja corregido el archivo para próximos reinicios.
+        persist_start_history(path, &history)?;
+    }
+    Ok(history)
+}
+
+/// Guardar en un archivo temporal y renombrar: una caída durante la escritura
+/// deja intacto el historial anterior. El fallo se propaga para que `start()`
+/// no cree el hijo sin haber registrado antes el transitorio de carga.
+fn persist_start_history(path: &Path, history: &[u64]) -> Result<(), String> {
+    if history.len() > START_HISTORY_MAX_ENTRIES {
+        return Err("demasiadas entradas para persistir".to_string());
+    }
+    let parent = path
+        .parent()
+        .ok_or_else(|| "la ruta no tiene directorio padre".to_string())?;
+    std::fs::create_dir_all(parent).map_err(|error| format!("directorio: {}", error))?;
+    let tmp = path.with_extension(format!("json.tmp-{}", std::process::id()));
+    let bytes = serde_json::to_vec(history).map_err(|error| format!("serialización: {}", error))?;
+    let write_result = (|| -> Result<(), String> {
+        let mut file = std::fs::OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .write(true)
+            .open(&tmp)
+            .map_err(|error| format!("temporal: {}", error))?;
+        file.write_all(&bytes)
+            .map_err(|error| format!("escritura: {}", error))?;
+        file.sync_all()
+            .map_err(|error| format!("flush: {}", error))?;
+        std::fs::rename(&tmp, path).map_err(|error| format!("reemplazo: {}", error))?;
+        Ok(())
+    })();
+    if write_result.is_err() {
+        let _ = std::fs::remove_file(&tmp);
+    }
+    write_result
+}
+
 /// Guardarraíl de arranques (LM-NF-3, puro y testeable): cooldown mínimo entre
 /// arranques + tope por hora rodante. `history` son epoch-secs de arranques
 /// previos (solo se podan entradas >1 h). Devuelve `Ok` y NO toca nada si
@@ -2010,7 +2311,10 @@ pub fn check_start_guard(
     history: &mut Vec<u64>,
     now: u64,
 ) -> Result<(), StartGuardWait> {
-    history.retain(|t| now.saturating_sub(*t) < 3600);
+    for timestamp in history.iter_mut() {
+        *timestamp = (*timestamp).min(now);
+    }
+    history.retain(|t| now - *t < 3600);
     if let Some(last) = history.iter().max() {
         let elapsed = now.saturating_sub(*last);
         if elapsed < cooldown_secs {
@@ -2080,6 +2384,51 @@ fn usage_from_value(v: &serde_json::Value) -> Option<(u64, u64)> {
         return None;
     }
     Some((prompt, completion))
+}
+
+/// Lee el decode real informado por llama.cpp. `timings` sólo representa la
+/// ejecución del motor; nunca se sustituye por tokens/request/tiempo total.
+fn parse_engine_decode_tps(body: &str) -> Option<f64> {
+    fn from_value(v: &serde_json::Value) -> Option<f64> {
+        let timings = v.get("timings")?;
+        let predicted = timings.get("predicted_n")?.as_u64()?;
+        if predicted == 0 {
+            return None;
+        }
+        let reported = timings
+            .get("predicted_per_second")
+            .and_then(|n| n.as_f64())
+            .filter(|n| n.is_finite() && *n > 0.0);
+        let computed = timings
+            .get("predicted_ms")
+            .and_then(|n| n.as_f64())
+            .filter(|ms| ms.is_finite() && *ms > 0.0)
+            .map(|ms| (predicted as f64) * 1000.0 / ms);
+        reported.or(computed).filter(|n| n.is_finite() && *n > 0.0)
+    }
+
+    let trimmed = body.trim();
+    if let Ok(value) = serde_json::from_str::<serde_json::Value>(trimmed) {
+        return from_value(&value);
+    }
+    let mut found = None;
+    for line in trimmed.lines() {
+        let Some(payload) = line.trim().strip_prefix("data:") else {
+            continue;
+        };
+        let payload = payload.trim();
+        if payload.is_empty() || payload == "[DONE]" {
+            continue;
+        }
+        if let Ok(value) = serde_json::from_str::<serde_json::Value>(payload) {
+            if value.get("timings").is_some() {
+                if let Some(tps) = from_value(&value) {
+                    found = Some(tps);
+                }
+            }
+        }
+    }
+    found
 }
 
 /// Veredicto de la puerta de aceptación: `>= 20` completion tokens y `>= 3` t/s
@@ -2419,6 +2768,15 @@ fn load_times_save(path: &Path, map: &HashMap<String, u64>) -> Result<(), String
 mod tests {
     use super::*;
 
+    #[test]
+    fn motor_usa_nucleos_fisicos_estimados_por_defecto() {
+        assert_eq!(physical_cores(12), Some(6));
+        assert_eq!(default_engine_threads_from_logical(12), 6);
+        assert_eq!(default_engine_threads_from_logical(8), 4);
+        assert_eq!(default_engine_threads_from_logical(1), 1);
+        assert_eq!(default_engine_threads_from_logical(0), 6);
+    }
+
     fn mi_model(file: &str) -> ModelInfo {
         ModelInfo {
             filename: file.to_string(),
@@ -2682,12 +3040,45 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    #[test]
+    fn flags_bloqueadas_no_detienen_el_motor_actual() {
+        let dir = std::env::temp_dir().join(format!("lm-rejected-flags-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("models")).unwrap();
+        std::fs::write(dir.join("models/model.gguf"), b"fixture").unwrap();
+        let cfg = std::sync::Arc::new(crate::config::ConfigStore::load_from_path(
+            &dir.join("config.toml"),
+        ));
+        cfg.update(|config| config.engine.extra_flags = vec!["--spec-type".to_string()]);
+        let mgr = ProcessManager::new_with_log_file(dir.clone(), cfg, scratch_log(&dir));
+        {
+            let mut st = mgr.status.write();
+            st.status = "running".to_string();
+            st.is_healthy = true;
+        }
+
+        let err = mgr
+            .start(StartRequest {
+                model: Some("model.gguf".to_string()),
+                profile: None,
+                context: None,
+                threads: None,
+                priority: None,
+            })
+            .unwrap_err();
+        assert!(err.contains("Flag bloqueada"), "{}", err);
+        assert_eq!(mgr.get_status().status, "running");
+        assert!(mgr.get_status().is_healthy);
+        drop(mgr);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     /// `cargo test` escribía en el log REAL del dueño. Medido: 6498 → 6499
     /// líneas en `%APPDATA%\LocalMind\logs\localmind.log` con UN solo
     /// `ProcessManager` construido en un temporal. El culpable no es `log()`
-    /// sino el `Drop` de CUALQUIER `ProcessManager`: `stop()` escribe
-    /// "Servidor detenido. 100% de VRAM y memoria liberada." y el archivo lo
-    /// recibía porque `logs_dir` resuelve `%APPDATA%` e ignora el `base_dir`
+    /// sino el `Drop` de CUALQUIER `ProcessManager`: `stop()` escribe el
+    /// mensaje de proceso detenido y el archivo lo recibía porque `logs_dir`
+    /// resuelve `%APPDATA%` e ignora el `base_dir`
     /// que recibe.
     ///
     /// No se toca esa precedencia (`%APPDATA%` gana sobre `base_dir` en
@@ -2750,8 +3141,8 @@ mod tests {
             escrito
         );
         assert!(
-            escrito.contains("Servidor detenido"),
-            "el `Drop` escribía en el log real del dueño; ahora debe escribir en \
+            escrito.contains("Proceso del motor detenido y finalizado."),
+            "el `Drop` debe escribir en el log temporal del dueño; ahora debe escribir en \
              el temporal: {:?}",
             escrito
         );
@@ -3145,6 +3536,25 @@ mod tests {
         );
     }
 
+    #[test]
+    fn argv_pasa_cache_ram_cero_para_desactivar_el_default_del_motor() {
+        let engine = crate::config::EngineConfig::default();
+        let profile = crate::config::HardwareProfile {
+            cache_ram: 0,
+            ..crate::config::HardwareProfile::default()
+        };
+        let tokens = argv_tokens(&engine, &profile, 32768, false);
+        let index = tokens.iter().position(|token| token == "--cache-ram");
+        assert!(
+            index.is_some(),
+            "debe anularse el default de llama-server: {tokens:?}"
+        );
+        assert_eq!(
+            tokens.get(index.unwrap() + 1).map(String::as_str),
+            Some("0")
+        );
+    }
+
     /// El valor repetido también tenía que ser correcto, no solo único: cada
     /// flag que depende de un valor debe ir seguida del suyo.
     #[test]
@@ -3193,9 +3603,9 @@ mod tests {
         );
     }
 
-    /// D-44: el banner de arranque describe el argv REAL. `--cache-reuse` está
-    /// deliberadamente descartado (el build lo rechaza), así que anunciarlo es
-    /// mentir sobre lo que se pasó.
+    /// D-44: el banner de arranque describe el argv REAL. `--cache-reuse` no
+    /// se envía mientras falte validarlo con el build 10743 y Qwen3.8, así que
+    /// anunciarlo sería mentir sobre lo que se pasó.
     #[test]
     fn banner_de_arranque_no_anuncia_cache_reuse() {
         let b = ProcessManager::start_banner(32768, 6, "512", 8080);
@@ -3241,6 +3651,91 @@ mod tests {
     fn usage_sse_final_chunk() {
         let body = "data: {\"id\":\"x\"}\n\ndata: {\"usage\":{\"prompt_tokens\":8,\"completion_tokens\":61,\"total_tokens\":69}}\n\ndata: [DONE]\n";
         assert_eq!(parse_usage(body), Some((8, 61)));
+    }
+
+    #[test]
+    fn engine_decode_tps_solo_lee_timings_del_motor() {
+        let body = r#"{"usage":{"prompt_tokens":700,"completion_tokens":120},"timings":{"predicted_n":120,"predicted_ms":6000,"predicted_per_second":20.0}}"#;
+        assert_eq!(parse_engine_decode_tps(body), Some(20.0));
+
+        let sse = "data: {\"choices\":[]}\n\ndata: {\"timings\":{\"predicted_n\":40,\"predicted_ms\":2000}}\n\ndata: [DONE]\n";
+        assert_eq!(parse_engine_decode_tps(sse), Some(20.0));
+
+        let sse_then_empty_timings = "data: {\"timings\":{\"predicted_n\":40,\"predicted_ms\":2000}}\n\ndata: {\"timings\":{\"predicted_n\":0,\"predicted_ms\":0}}\n\ndata: [DONE]\n";
+        assert_eq!(parse_engine_decode_tps(sse_then_empty_timings), Some(20.0));
+
+        let pretty_json_with_data_text = r#"{
+            "message": "data: descriptive text",
+            "timings": {"predicted_n": 40, "predicted_ms": 2000}
+        }"#;
+        assert_eq!(
+            parse_engine_decode_tps(pretty_json_with_data_text),
+            Some(20.0)
+        );
+
+        let no_timings = r#"{"usage":{"prompt_tokens":700,"completion_tokens":120}}"#;
+        assert_eq!(parse_engine_decode_tps(no_timings), None);
+        let zero_decode =
+            r#"{"timings":{"predicted_n":0,"predicted_ms":1,"predicted_per_second":0.0}}"#;
+        assert_eq!(parse_engine_decode_tps(zero_decode), None);
+    }
+
+    #[test]
+    fn gate_rate_incluye_el_cuerpo_completo_y_separa_decode() {
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+
+        let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let body = r#"{"usage":{"prompt_tokens":8,"completion_tokens":30},"timings":{"predicted_n":30,"predicted_ms":300,"predicted_per_second":100.0}}"#;
+        let response_body = body.as_bytes().to_vec();
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut request = Vec::new();
+            let mut buf = [0u8; 1024];
+            let header_end;
+            loop {
+                let n = stream.read(&mut buf).unwrap();
+                request.extend_from_slice(&buf[..n]);
+                if let Some(pos) = request.windows(4).position(|w| w == b"\r\n\r\n") {
+                    header_end = pos + 4;
+                    break;
+                }
+            }
+            let headers = String::from_utf8_lossy(&request[..header_end]);
+            let content_len = headers
+                .lines()
+                .find_map(|line| {
+                    let (key, value) = line.split_once(':')?;
+                    key.eq_ignore_ascii_case("content-length")
+                        .then(|| value.trim().parse::<usize>().ok())
+                        .flatten()
+                })
+                .unwrap_or(0);
+            while request.len().saturating_sub(header_end) < content_len {
+                let n = stream.read(&mut buf).unwrap();
+                assert!(n > 0, "el cuerpo de la petición quedó incompleto");
+                request.extend_from_slice(&buf[..n]);
+            }
+            write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                response_body.len()
+            )
+            .unwrap();
+            stream.flush().unwrap();
+            std::thread::sleep(Duration::from_millis(250));
+            stream.write_all(&response_body).unwrap();
+        });
+
+        let sample = ProcessManager::gate_sample(port, 200).unwrap();
+        server.join().unwrap();
+        assert!(
+            sample.request_tps < 200.0,
+            "la tasa de request debe incluir la espera del cuerpo: {:?}",
+            sample
+        );
+        assert_eq!(sample.decode_tps, Some(100.0));
     }
 
     #[test]
@@ -3499,6 +3994,104 @@ mod tests {
         assert!(h.is_empty());
         record_start(&mut h, 9999);
         assert_eq!(h, vec![9999u64]);
+    }
+
+    #[test]
+    fn start_history_survives_process_manager_recreation() {
+        let dir = std::env::temp_dir().join(format!(
+            "lm-start-history-{}-{}",
+            "recreation",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let config_path = dir.join("config.toml");
+        let log_file = scratch_log(&dir);
+        let now = unix_now_secs();
+
+        let cfg_a = std::sync::Arc::new(crate::config::ConfigStore::load_from_path(&config_path));
+        let first = ProcessManager::new_with_log_file(dir.clone(), cfg_a, log_file.clone());
+        {
+            let mut history = first.start_history.lock();
+            record_start(&mut history, now.saturating_sub(15));
+            persist_start_history(&first.start_history_file, &history).unwrap();
+        }
+        drop(first);
+
+        let cfg_b = std::sync::Arc::new(crate::config::ConfigStore::load_from_path(&config_path));
+        let second = ProcessManager::new_with_log_file(dir.clone(), cfg_b, log_file);
+        let mut loaded = second.start_history.lock();
+        assert_eq!(
+            loaded.len(),
+            1,
+            "el nuevo manager debe recuperar el arranque"
+        );
+        let wait = check_start_guard(120, 4, &mut loaded, unix_now_secs()).unwrap_err();
+        assert!(wait.cooldown_left > 0 && wait.cooldown_left <= 105);
+        drop(loaded);
+        drop(second);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn start_history_replacement_is_atomic_and_corruption_fails_closed() {
+        let dir = std::env::temp_dir().join(format!(
+            "lm-start-history-{}-{}",
+            "replace",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("start-history.json");
+        let now = unix_now_secs();
+
+        persist_start_history(&path, &[now.saturating_sub(50)]).unwrap();
+        persist_start_history(&path, &[now.saturating_sub(40), now.saturating_sub(20)]).unwrap();
+        assert_eq!(
+            load_start_history(&path, now).unwrap(),
+            vec![now.saturating_sub(40), now.saturating_sub(20)],
+            "el rename debe reemplazar el historial previo en Windows"
+        );
+
+        std::fs::write(&path, b"not-json").unwrap();
+        assert!(load_start_history(&path, now).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn start_history_future_timestamp_is_normalized_and_keeps_one_cooldown() {
+        let dir =
+            std::env::temp_dir().join(format!("lm-start-history-future-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("start-history.json");
+        let now = 1_800_000_000u64;
+
+        persist_start_history(&path, &[u64::MAX]).unwrap();
+        assert_eq!(load_start_history(&path, now).unwrap(), vec![now]);
+        assert_eq!(
+            serde_json::from_slice::<Vec<u64>>(&std::fs::read(&path).unwrap()).unwrap(),
+            vec![now],
+            "el archivo también debe quedar corregido para reinicios posteriores"
+        );
+
+        let mut loaded_history = load_start_history(&path, now).unwrap();
+        let wait = check_start_guard(120, 4, &mut loaded_history, now + 10).unwrap_err();
+        assert_eq!(wait.cooldown_left, 110);
+        assert_eq!(loaded_history, vec![now]);
+
+        let mut in_memory_future = vec![u64::MAX];
+        let wait = check_start_guard(120, 4, &mut in_memory_future, now + 10).unwrap_err();
+        assert_eq!(wait.cooldown_left, 120);
+        assert_eq!(in_memory_future, vec![now + 10]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn slow_assessment_distinguishes_missing_decode_metrics_from_fast() {
+        assert_eq!(engine_slow_assessment(None, 20.0), (false, false));
+        assert_eq!(engine_slow_assessment(Some(19.9), 20.0), (true, true));
+        assert_eq!(engine_slow_assessment(Some(20.0), 20.0), (true, false));
     }
 
     #[test]

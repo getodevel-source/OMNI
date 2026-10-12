@@ -259,9 +259,45 @@ fn status_json(st: ServerStatus) -> String {
 }
 
 fn app_config_json(c: &crate::config::AppConfig) -> String {
-    // Forma que la UI espera (`GET /api/config`, `POST` devuelve lo mismo):
-    // solo las secciones editables; `ubatch`/`device`/`llama_port`/`http_port`
-    // son de solo lectura y no se aceptan en el POST.
+    // Forma que la UI espera (`GET /api/config`, `POST` devuelve lo mismo), con
+    // datos de solo lectura que no se aceptan en el POST, como ubatch/device/puertos.
+    // El fingerprint usa una tupla ordenada de opciones que cambian el argv o
+    // el trabajo del motor. Expone solo el hash, nunca los valores de extra_flags.
+    let mut profile_runtime_settings: Vec<_> = c
+        .profiles
+        .iter()
+        .map(|p| (&p.id, p.context, p.cache_ram, &p.extra_flags))
+        .collect();
+    profile_runtime_settings.sort_by(|a, b| a.0.cmp(b.0));
+    let runtime_settings = (
+        (
+            &c.engine.device,
+            c.engine.threads,
+            c.engine.threads_batch,
+            &c.engine.priority,
+            &c.engine.priority_batch,
+            c.engine.batch,
+            &c.engine.process_priority,
+            c.engine.poll,
+            c.engine.limit_threads_batch,
+            c.engine.power_safe,
+            &c.engine.extra_flags,
+            &c.engine.speculation,
+        ),
+        (
+            c.engine.flash_attention,
+            c.engine.metrics,
+            c.engine.reasoning_preserve,
+            c.mmproj.auto,
+            &c.mmproj.files,
+            &c.last.model,
+            &c.last.profile,
+            c.last.context,
+        ),
+        profile_runtime_settings,
+    );
+    let runtime_fingerprint_sha256 =
+        crate::models::sha256_hex(&serde_json::to_vec(&runtime_settings).unwrap_or_default());
     serde_json::json!({
         "engine": {
             "idle_timeout_secs": c.engine.idle_timeout_secs,
@@ -271,6 +307,8 @@ fn app_config_json(c: &crate::config::AppConfig) -> String {
             "batch": c.engine.batch,
             "ubatch": 512,
             "device": c.engine.device,
+            "runtime_fingerprint_sha256": runtime_fingerprint_sha256,
+            "extra_flags_count": c.engine.extra_flags.len(),
             "llama_port": c.engine.llama_port,
             "http_port": c.engine.http_port,
         },
@@ -4439,6 +4477,70 @@ mod proxy {
             assert!(!effort_mismatch("Llama-3.1-8B", None));
             assert!(!effort_mismatch("Qwen3.8-27B", None));
         }
+        #[test]
+        fn config_runtime_fingerprint_cubre_flags_sin_exponer_sus_valores() {
+            let dir = std::env::temp_dir()
+                .join(format!("lm-test-engine-fingerprint-{}", std::process::id()));
+            let _ = std::fs::create_dir_all(&dir);
+            let store = crate::config::ConfigStore::load_from_path(&dir.join("localmind.toml"));
+            let base_json = super::super::app_config_json(&store.get());
+            let base: serde_json::Value = serde_json::from_str(&base_json).unwrap();
+            let base_hash = base["engine"]["runtime_fingerprint_sha256"]
+                .as_str()
+                .unwrap();
+            assert_eq!(base_hash.len(), 64);
+            assert_eq!(base["engine"]["extra_flags_count"], serde_json::json!(0));
+
+            let mut changed = store.get();
+            changed
+                .engine
+                .extra_flags
+                .push("--private-test-value".to_string());
+            let changed_json = super::super::app_config_json(&changed);
+            let changed_value: serde_json::Value = serde_json::from_str(&changed_json).unwrap();
+            let changed_hash = changed_value["engine"]["runtime_fingerprint_sha256"]
+                .as_str()
+                .unwrap();
+            assert_ne!(base_hash, changed_hash);
+            assert_eq!(
+                changed_value["engine"]["extra_flags_count"],
+                serde_json::json!(1)
+            );
+            assert!(!changed_json.contains("--private-test-value"));
+
+            let mut changed_profile = store.get();
+            changed_profile.profiles[0].context += 1024;
+            changed_profile.profiles[0]
+                .extra_flags
+                .push("--profile-private-value".to_string());
+            let profile_json = super::super::app_config_json(&changed_profile);
+            let profile_value: serde_json::Value = serde_json::from_str(&profile_json).unwrap();
+            assert_ne!(
+                profile_value["engine"]["runtime_fingerprint_sha256"],
+                base["engine"]["runtime_fingerprint_sha256"]
+            );
+            assert!(!profile_json.contains("--profile-private-value"));
+
+            let mut changed_argv = store.get();
+            changed_argv.engine.metrics = !changed_argv.engine.metrics;
+            changed_argv.mmproj.auto = !changed_argv.mmproj.auto;
+            let argv_json = super::super::app_config_json(&changed_argv);
+            let argv_value: serde_json::Value = serde_json::from_str(&argv_json).unwrap();
+            assert_ne!(
+                argv_value["engine"]["runtime_fingerprint_sha256"],
+                base["engine"]["runtime_fingerprint_sha256"]
+            );
+
+            let mut reordered_profiles = store.get();
+            reordered_profiles.profiles.reverse();
+            let reordered_json = super::super::app_config_json(&reordered_profiles);
+            let reordered_value: serde_json::Value = serde_json::from_str(&reordered_json).unwrap();
+            assert_eq!(
+                reordered_value["engine"]["runtime_fingerprint_sha256"],
+                base["engine"]["runtime_fingerprint_sha256"]
+            );
+        }
+
         #[test]
         fn config_speculation_enabled_persiste_y_subclave_desconocida_se_rechaza() {
             // `POST /api/config {"engine":{"speculation":{"enabled":false}}}`:

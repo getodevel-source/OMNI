@@ -26,6 +26,7 @@ use std::sync::Arc;
 use tao::dpi::LogicalSize;
 use tao::event::{Event, WindowEvent};
 use tao::event_loop::{ControlFlow, EventLoop};
+use tao::platform::windows::WindowBuilderExtWindows;
 use tao::window::{Icon, WindowBuilder};
 use wry::WebViewBuilder;
 
@@ -62,27 +63,29 @@ fn app_dir() -> PathBuf {
         .unwrap_or_default()
 }
 
-/// Icono de la ventana: `omni.ico` junto al exe → `base_dir` (datos) →
-/// embebido en el binario (siempre hay icono, aun sin ficheros en disco).
-/// Antes solo miraba `base_dir`: en instalación normal el `.ico` vive junto
-/// al exe y la ventana salía sin icono.
-fn load_window_icon(base_dir: &Path) -> Option<Icon> {
+/// Iconos de título y taskbar: `omni.ico` junto al exe → `base_dir` (datos) →
+/// embebido en el binario. Tao usa ICON_SMALL para el título e ICON_BIG para
+/// la barra de tareas; se preparan a 32 y 256 px para evitar el reescalado GDI.
+fn load_window_icons(base_dir: &Path) -> Option<(Icon, Icon)> {
     for dir in [app_dir(), base_dir.to_path_buf()] {
         for name in ["omni.ico", "localmind.ico"] {
             if let Ok(bytes) = std::fs::read(dir.join(name)) {
-                if let Some(icon) = icon_from_bytes(&bytes) {
-                    return Some(icon);
+                if let Some(icons) = icons_from_bytes(&bytes) {
+                    return Some(icons);
                 }
             }
         }
     }
-    icon_from_bytes(include_bytes!("../assets/omni.ico"))
+    icons_from_bytes(include_bytes!("../assets/omni.ico"))
 }
 
-fn icon_from_bytes(bytes: &[u8]) -> Option<Icon> {
+fn icons_from_bytes(bytes: &[u8]) -> Option<(Icon, Icon)> {
     let img = image::load_from_memory(bytes).ok()?.to_rgba8();
     let (width, height) = img.dimensions();
-    Icon::from_rgba(img.into_raw(), width, height).ok()
+    let taskbar_icon = Icon::from_rgba(img.as_raw().clone(), width, height).ok()?;
+    let small = image::imageops::resize(&img, 32, 32, image::imageops::FilterType::Lanczos3);
+    let window_icon = Icon::from_rgba(small.into_raw(), 32, 32).ok()?;
+    Some((window_icon, taskbar_icon))
 }
 
 /// Formatear la línea que el hook de pánico escribe en el log (D-46).
@@ -292,8 +295,10 @@ fn main() {
         .with_inner_size(LogicalSize::new(1180.0, 820.0))
         .with_min_inner_size(LogicalSize::new(960.0, 680.0));
 
-    if let Some(icon) = load_window_icon(&base_dir) {
-        window_builder = window_builder.with_window_icon(Some(icon));
+    if let Some((window_icon, taskbar_icon)) = load_window_icons(&base_dir) {
+        window_builder = window_builder
+            .with_window_icon(Some(window_icon))
+            .with_taskbar_icon(Some(taskbar_icon));
     }
 
     let window = match window_builder.build(&event_loop) {

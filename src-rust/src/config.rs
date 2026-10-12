@@ -115,15 +115,12 @@ pub struct EngineConfig {
     /// Puerto preferido del motor (llama-server). Si está ocupado se busca el siguiente libre.
     #[serde(default = "default_llama_port")]
     pub llama_port: u16,
-    /// Reutilización de prefijos de prompt en KV cache (legado, INERTE).
-    /// El build 10683 rechaza `--cache-reuse` en este contexto con
-    /// `cache_reuse is not supported by this context` (medido 2026-09-27 en
-    /// 4 combinaciones: mínimo, -kvu, -np 2, --cache-prompt explícito) y la
-    /// reutilización de prefijo ya funciona sin el flag: mismo prompt de
-    /// 2699 tok a 128K, COLD 29585 ms → WARM 3109/3084 ms (~9,5×), con
-    /// `prompt_tokens_cached` 42 → 2737 → 5432 en `/api/metrics` (el slot
-    /// conserva el KV entre requests con `-np 1`). Campo conservado sin
-    /// efecto para no romper TOMLs/APIs que lo lean.
+    /// Reutilización de prefijos de prompt en KV cache (legado, inerte en OMNI).
+    /// El build 10683 rechazó `--cache-reuse` en este contexto en cuatro
+    /// combinaciones (medido 2026-09-27). El build 10743 sí incluye la opción,
+    /// pero su efecto en Qwen3.8 y este tamaño de contexto sigue sin validarse en vivo;
+    /// `build_engine_cmd` no la envía hasta medirla. Se conserva el campo para
+    /// no romper TOMLs/APIs que lo lean.
     #[serde(default = "default_cache_reuse")]
     pub cache_reuse: usize,
 }
@@ -183,9 +180,11 @@ pub const DEFAULT_PROFILE_ID: &str = "velocidad";
 /// Versión de config materializada. Historial:
 /// v1 = `--no-mmap` en `libros`; v2 = vuelta a `[]`; v3 = `--load-mode none`
 /// en `libros`; v4 = vuelta a `[]` (SEGURIDAD LM-NF-3); v5 = `[engine]`
-/// (idle 1500→5400 + cooldown 120 + tope 4/h + power_safe + slow_gate_tps 20).
+/// (idle 1500→5400 + cooldown 120 + tope 4/h + power_safe + slow_gate_tps 20);
+/// v6 = caché de prompts `--cache-ram` desactivada por defecto: no es offload KV;
+/// v7 = actualizar nombres y descripciones antiguas de perfiles integrados.
 /// La migración refresca no-customizados (fotos previas reconocidas).
-pub const PROFILES_VERSION: u32 = 5;
+pub const PROFILES_VERSION: u32 = 7;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NotificationsConfig {
@@ -352,7 +351,23 @@ pub fn profile_flag_ok(f: &str) -> bool {
 }
 /// La lista completa de flags: ≤8 entradas.
 pub fn profile_flags_ok(flags: &[String]) -> bool {
-    flags.len() <= 8 && flags.iter().all(|f| profile_flag_ok(f))
+    flags.len() <= 8
+        && flags.iter().all(|f| profile_flag_ok(f))
+        && cache_type_override_flag(flags).is_none()
+}
+
+/// El tipo de KV cache es una decisión de memoria del motor y se fija en q4_0.
+/// Evita que `extra_flags` tenga más precedencia que los argumentos gestionados.
+pub fn cache_type_override_flag(flags: &[String]) -> Option<&str> {
+    flags.iter().map(String::as_str).find(|flag| {
+        ["-ctk", "-ctv", "--cache-type-k", "--cache-type-v"]
+            .iter()
+            .any(|name| {
+                *flag == *name
+                    || flag.starts_with(&format!("{}=", name))
+                    || flag.starts_with(&format!("{} ", name))
+            })
+    })
 }
 
 /// Candado PSU + escritura en disco (LM-NF-3, P1-IO): flags que suben el consumo
@@ -566,7 +581,7 @@ pub fn built_in_profiles() -> Vec<HardwareProfile> {
             // Fase C: el id NO cambia (compat TOML/migración/tests); el nombre
             // visible sí: este es el perfil por defecto ("Recomendado").
             name: "Recomendado · 32K (el más rápido)".to_string(),
-            description: "Todo el modelo y su memoria de conversación (KV cache) viven íntegramente en la VRAM de la GPU. Es el modo más rápido con mínima latencia. Ideal para chat, preguntas y código corto (<30k palabras).".to_string(),
+            description: "Contexto de 32K. La caché de prompts en RAM está desactivada; esto no cambia dónde se aloja el KV activo. Ideal para chat, preguntas y código corto (<30k palabras).".to_string(),
             context: 32768,
             cache_ram: 0,
             extra_flags: Vec::new(),
@@ -574,19 +589,20 @@ pub fn built_in_profiles() -> Vec<HardwareProfile> {
         HardwareProfile {
             id: "multi_doc".to_string(),
             name: "Multi-documento · 64K (velocidad levemente menor)".to_string(),
-            description: "El modelo reside en VRAM y parte del KV cache pasa a la memoria RAM del sistema. Cede ~5% de velocidad para sostener ~60k palabras de contexto: múltiples documentos o repositorios completos.".to_string(),
+            description: "Contexto de 64K para varios documentos o repositorios. La caché de prompts en RAM está desactivada; esto no mueve el KV activo fuera de la VRAM.".to_string(),
             context: 65536,
-            cache_ram: 4096,
+            cache_ram: 0,
             extra_flags: Vec::new(),
         },
         HardwareProfile {
             id: "libros".to_string(),
             name: "Libros largos · 128K contexto extendido".to_string(),
-            description: "Modelo en VRAM + KV cache ampliado en RAM del sistema: sostiene ~120k palabras (un libro entero o proyecto grande). Velocidad moderada (~15-20% menor que Velocidad máxima) al cursar tráfico por el bus de memoria.".to_string(),
+            description: "Contexto de 128K para libros o proyectos grandes. La caché de prompts en RAM está desactivada; esto no mueve el KV activo fuera de la VRAM.".to_string(),
             context: 131072,
-            // Jank 128K medido 2026-09-25 (máquina quieta, sampler 200 s @5 s):
-            //   cache_ram 6144 → commit ~88 %, libre ~1,4 GB, decode 16,04 t/s
-            //   cache_ram 0    → commit ~88 %, libre ~0,65 GB, decode 16,23 t/s
+            // `cache_ram` limita la caché de prompts del servidor, no la
+            // ubicación del KV activo. La caché queda apagada por defecto
+            // mientras se valida corrección y beneficio en este build. Las
+            // mediciones históricas no prueban offload de KV.
             // A/B prefill 8k @128K (mismo prompt 10546 tok, misma máquina):
             //   mmap default → prefill 21,65 t/s · decode 14,01 t/s
             //   sin mmap     → prefill 38,18 t/s · decode 13,92 t/s
@@ -597,22 +613,21 @@ pub fn built_in_profiles() -> Vec<HardwareProfile> {
             // como OPT-IN por perfil (medido: RAM libre +5 GB, prefill +76 %,
             // decode igual): añadir `extra_flags = ["--load-mode", "none"]`.
             // No tocar -ub/-b/hilos/spec en este perfil (PSU).
-            cache_ram: 6144,
+            cache_ram: 0,
             extra_flags: Vec::new(),
         },
         HardwareProfile {
             id: "max_contexto".to_string(),
             name: "Máximo contexto · 262K (límite físico del modelo)".to_string(),
-            description: "Alcanza los 262,144 tokens que el modelo soporta nativamente (~200k palabras: bases de código masivas). Requiere memoria RAM compartida considerable; ideal para cargas analíticas profundas.".to_string(),
+            description: "Alcanza los 262,144 tokens que el modelo soporta nativamente (~200k palabras: bases de código masivas). La memoria para el KV activo depende del modelo, contexto y hardware; `cache_ram` no lo desborda a RAM.".to_string(),
             context: 262144,
-            // Barrido --cache-ram medido 2026-09-25 (bench.mjs, 262k/p512/m256,
-            // Qwen3.8-27B IQ4_XS en RX 6800 XT 16 GB; gen_tps de /api/metrics):
-            //   0 → 14.10 t/s · 4096 → 14.18 t/s · 6144 → 14.16 t/s · 8192 → 14.20 t/s
-            // Conclusión: --cache-ram no mueve el cuello a 262K (plano ±0.1 t/s);
-            // se mantiene 6144. SEGURIDAD (LM-NF-3): load mode default (mmap)
-            // para arranques baratos; `--load-mode none` solo opt-in por perfil.
+            // El barrido histórico comparó tamaños de la caché de prompts,
+            // no el offload del KV activo; no sirve para dimensionar contexto.
+            // Se desactiva por defecto mientras se valida su corrección y
+            // beneficio. SEGURIDAD (LM-NF-3): load mode mmap por defecto;
+            // `--load-mode none` solo opt-in por perfil.
             // No tocar -ub/-b/hilos/spec en este perfil (PSU).
-            cache_ram: 6144,
+            cache_ram: 0,
             extra_flags: vec!["-kvu".to_string()],
         },
     ]
@@ -621,19 +636,24 @@ pub fn built_in_profiles() -> Vec<HardwareProfile> {
 /// Foto de los integrados en una versión dada. Al subir `PROFILES_VERSION`
 /// se conservan TODAS las fotos previas que la migración deba reconocer:
 /// v0/v2 = `libros` sin flags; v1 = `libros` con `--no-mmap`;
-/// v3 = `libros` con `--load-mode none`; v4 = vuelta a `[]` (seguridad).
+/// v3 = `libros` con `--load-mode none`; v4 = vuelta a `[]` (seguridad);
+/// v5 = perfiles previos a desactivar la caché de prompts por defecto.
 /// El resto idéntico en todas. Solo campos migrables. Sin pánicos.
 pub fn previous_built_in_field(id: &str, version: u32) -> Option<(usize, usize, Vec<String>)> {
     match (id, version) {
         ("velocidad", _) => Some((32768, 0, Vec::new())),
+        ("multi_doc", 6) => Some((65536, 0, Vec::new())),
         ("multi_doc", _) => Some((65536, 4096, Vec::new())),
         ("libros", 0) | ("libros", 2) | ("libros", 4) => Some((131072, 6144, Vec::new())),
+        ("libros", 5) => Some((131072, 6144, Vec::new())),
+        ("libros", 6) => Some((131072, 0, Vec::new())),
         ("libros", 1) => Some((131072, 6144, vec!["--no-mmap".to_string()])),
         ("libros", 3) => Some((
             131072,
             6144,
             vec!["--load-mode".to_string(), "none".to_string()],
         )),
+        ("max_contexto", 6) => Some((262144, 0, vec!["-kvu".to_string()])),
         ("max_contexto", _) => Some((262144, 6144, vec!["-kvu".to_string()])),
         _ => None,
     }
@@ -741,8 +761,9 @@ pub fn migrate_engine_defaults(cfg: &mut AppConfig, stored_version: u32) -> Vec<
 /// su valor no coincide con ninguna foto previa. Regla por id conocido:
 /// `extra_flags` se actualiza solo si cada flag guardada ya estaba en alguna
 /// foto previa (el usuario no añadió nada); `cache_ram`/`context` solo si
-/// siguen iguales a alguna foto previa. Ids desconocidos intactos. Devuelve
-/// los ids tocados (para el log).
+/// siguen iguales a alguna foto previa. Nombre y descripción solo se refrescan
+/// cuando coinciden exactamente con una presentación anterior conocida. Ids
+/// desconocidos intactos. Devuelve los ids tocados (para el log).
 pub fn migrate_builtin_profiles_from(
     stored: &mut [HardwareProfile],
     stored_version: u32,
@@ -779,11 +800,66 @@ pub fn migrate_builtin_profiles_from(
             p.cache_ram = cur.cache_ram;
             changed = true;
         }
+        if let Some((old_names, old_descriptions)) = previous_built_in_presentation(&p.id) {
+            if old_names.contains(&p.name.as_str()) && p.name != cur.name {
+                p.name = cur.name.clone();
+                changed = true;
+            }
+            if old_descriptions.contains(&p.description.as_str())
+                && p.description != cur.description
+            {
+                p.description = cur.description.clone();
+                changed = true;
+            }
+        }
         if changed {
             touched.push(p.id.clone());
         }
     }
     touched
+}
+
+/// Textos de versiones anteriores de perfiles integrados. Solo se usan para
+/// refrescar presentación si el valor guardado coincide exactamente con un
+/// texto que OMNI publicó antes; nombres y descripciones personalizados siguen
+/// intactos.
+pub fn previous_built_in_presentation(
+    id: &str,
+) -> Option<(&'static [&'static str], &'static [&'static str])> {
+    match id {
+        "velocidad" => Some((
+            &[
+                "Velocidad máxima · 32K contextos cortos",
+                "Recomendado · 32K (el más rápido)",
+            ],
+            &[
+                "Todo el modelo y su memoria de conversación (KV cache) viven en los 16 GB de la GPU. Es el modo más rápido: ~17 t/s. Ideal para chat, preguntas y código corto (sesiones de menos de ~30k palabras).",
+                "Todo el modelo y su memoria de conversación (KV cache) viven íntegramente en la VRAM de la GPU. Es el modo más rápido con mínima latencia. Ideal para chat, preguntas y código corto (<30k palabras).",
+            ],
+        )),
+        "multi_doc" => Some((
+            &["Multi-documento · 64K (velocidad levemente menor)"],
+            &[
+                "El modelo vive en VRAM y parte del KV cache pasa a RAM DDR5. Renuncia ~5% de velocidad para sostener ~60k palabras de contexto: varios documentos o un repo de código mediano en la misma conversación.",
+                "El modelo reside en VRAM y parte del KV cache pasa a la memoria RAM del sistema. Cede ~5% de velocidad para sostener ~60k palabras de contexto: múltiples documentos o repositorios completos.",
+            ],
+        )),
+        "libros" => Some((
+            &["Libros largos · 128K contexto extendido"],
+            &[
+                "Modelo intacto en VRAM + KV cache ampliado en RAM DDR5: sostiene ~120k palabras (un libro entero, un repo mediano). La velocidad de respuesta baja ~15-20% frente a Velocidad máxima porque parte de la memoria del prompt viaja por DDR5.",
+                "Modelo en VRAM + KV cache ampliado en RAM del sistema: sostiene ~120k palabras (un libro entero o proyecto grande). Velocidad moderada (~15-20% menor que Velocidad máxima) al cursar tráfico por el bus de memoria.",
+            ],
+        )),
+        "max_contexto" => Some((
+            &["Máximo contexto · 262K (límite físico del modelo)"],
+            &[
+                "Alcanza los 262,144 tokens que el modelo soporta nativamente (~200k palabras: biblia, code bases enormes). El más lento y el que más tensiona CPU/PSU: úsalo solo cuando necesites sujetar la obra completa en una sola conversación.",
+                "Alcanza los 262,144 tokens que el modelo soporta nativamente (~200k palabras: bases de código masivas). Requiere memoria RAM compartida considerable; ideal para cargas analíticas profundas.",
+            ],
+        )),
+        _ => None,
+    }
 }
 
 /// Atajo para tests: migrar como si el TOML estuviera en v0.
@@ -1443,6 +1519,10 @@ mod tests {
         ];
         assert!(profile_flags_ok(&ok_flags));
         assert!(profile_flags_ok(&[]));
+        assert!(!profile_flags_ok(&["-ctk".to_string(), "f16".to_string()]));
+        assert!(!profile_flags_ok(&["-ctk f16".to_string()]));
+        assert!(!profile_flags_ok(&["--cache-type-v=q8_0".to_string()]));
+        assert!(profile_flags_ok(&["-kvu".to_string()]));
         // Máximo 8 flags
         let nine = (0..9).map(|i| format!("-f{}", i)).collect::<Vec<_>>();
         assert!(!profile_flags_ok(&nine));
@@ -1740,7 +1820,7 @@ mod tests {
             );
             let _ = touched;
         }
-        assert_eq!(PROFILES_VERSION, 5);
+        assert_eq!(PROFILES_VERSION, 7);
     }
 
     #[test]
@@ -1767,12 +1847,101 @@ mod tests {
     }
 
     #[test]
+    fn mig_v5_desactiva_cache_de_prompts_sin_tocar_valores_custom() {
+        let mut stored = vec![
+            mig_profile("multi_doc", 65536, 4096, &[]),
+            mig_profile("libros", 131072, 6144, &[]),
+            mig_profile("max_contexto", 262144, 8192, &["-kvu"]),
+        ];
+        let touched = migrate_builtin_profiles_from(&mut stored, 5);
+        assert_eq!(touched, vec!["multi_doc", "libros"]);
+        assert_eq!(stored[0].cache_ram, 0);
+        assert_eq!(stored[1].cache_ram, 0);
+        assert_eq!(stored[2].cache_ram, 8192, "el límite custom se conserva");
+    }
+
+    #[test]
+    fn mig_v6_refresca_presentacion_heredada_y_respeta_personalizaciones() {
+        let mut stored = vec![
+            mig_profile("velocidad", 32768, 0, &[]),
+            mig_profile("multi_doc", 65536, 0, &[]),
+            mig_profile("libros", 131072, 0, &[]),
+        ];
+        stored[0].name = "Recomendado · 32K (el más rápido)".to_string();
+        stored[0].description = "Todo el modelo y su memoria de conversación (KV cache) viven íntegramente en la VRAM de la GPU. Es el modo más rápido con mínima latencia. Ideal para chat, preguntas y código corto (<30k palabras).".to_string();
+        stored[1].name = "Multi-documento · 64K (velocidad levemente menor)".to_string();
+        stored[1].description = "El modelo vive en VRAM y parte del KV cache pasa a RAM DDR5. Renuncia ~5% de velocidad para sostener ~60k palabras de contexto: varios documentos o un repo de código mediano en la misma conversación.".to_string();
+        stored[2].name = "Mi perfil".to_string();
+        stored[2].description = "KV adaptado manualmente a mi equipo".to_string();
+
+        let touched = migrate_builtin_profiles_from(&mut stored, 6);
+        let current = built_in_profiles();
+        assert_eq!(touched, vec!["velocidad", "multi_doc"]);
+        assert_eq!(stored[0].name, current[0].name);
+        assert_eq!(stored[0].description, current[0].description);
+        assert_eq!(stored[1].name, current[1].name);
+        assert_eq!(stored[1].description, current[1].description);
+        assert_eq!(stored[2].name, "Mi perfil");
+        assert_eq!(stored[2].description, "KV adaptado manualmente a mi equipo");
+    }
+
+    #[test]
+    fn mig_v6_actualiza_libros_con_defaults_y_textos_publicados() {
+        let current = built_in_profiles();
+        let (old_names, old_descriptions) = previous_built_in_presentation("libros").unwrap();
+        let mut stored = vec![mig_profile("libros", 131072, 0, &[])];
+        stored[0].name = old_names[0].to_string();
+        stored[0].description = old_descriptions[0].to_string();
+
+        let touched = migrate_builtin_profiles_from(&mut stored, 6);
+
+        assert_eq!(touched, vec!["libros"]);
+        assert_eq!(stored[0].name, current[2].name);
+        assert_eq!(stored[0].description, current[2].description);
+        assert_eq!(stored[0].cache_ram, 0);
+    }
+
+    #[test]
+    fn mig_config_actualiza_textos_antiguos_y_escribe_una_copia() {
+        let dir = std::env::temp_dir().join(format!("lm-mig-presentacion-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("localmind.toml");
+        let old = r#"profiles_version = 5
+
+[[profiles]]
+id = "velocidad"
+name = "Velocidad máxima · 32K contextos cortos"
+description = "Todo el modelo y su memoria de conversación (KV cache) viven en los 16 GB de la GPU. Es el modo más rápido: ~17 t/s. Ideal para chat, preguntas y código corto (sesiones de menos de ~30k palabras)."
+context = 32768
+cache_ram = 0
+extra_flags = []
+"#;
+        std::fs::write(&path, old).unwrap();
+        let store = ConfigStore::load_from_path(&path);
+        let migrated = store.get();
+        let expected = built_in_profiles().remove(0);
+        assert_eq!(migrated.profiles_version, PROFILES_VERSION);
+        assert_eq!(migrated.profiles[0].name, expected.name);
+        assert_eq!(migrated.profiles[0].description, expected.description);
+        let written = std::fs::read_to_string(&path).unwrap();
+        assert!(written.contains("profiles_version = 7"));
+        assert!(!written.contains("16 GB de la GPU"));
+        assert_eq!(
+            std::fs::read_to_string(path.with_extension("toml.bak")).unwrap(),
+            old
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn mig_user_flag_keeps_profile() {
-        // (b) Flag añadida por el usuario → no se sobrescribe (ninguna versión).
+        // La flag del usuario se conserva aunque migre el límite por defecto.
         let mut stored = vec![mig_profile("libros", 131072, 6144, &["--mi-flag"])];
         let touched = migrate_builtin_profiles(&mut stored);
-        assert!(touched.is_empty());
+        assert_eq!(touched, vec!["libros".to_string()]);
         assert_eq!(stored[0].extra_flags, vec!["--mi-flag".to_string()]);
+        assert_eq!(stored[0].cache_ram, 0);
     }
 
     #[test]
@@ -1829,7 +1998,7 @@ mod tests {
         assert_eq!(mio.context, 999);
         assert_eq!(cfg.profiles_version, PROFILES_VERSION);
         let back = std::fs::read_to_string(dir.join("LocalMind").join("localmind.toml")).unwrap();
-        assert!(back.contains("profiles_version = 5"));
+        assert!(back.contains("profiles_version = 7"));
         assert!(!back.contains("--load-mode"));
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -1848,7 +2017,7 @@ mod tests {
         let cfg = store.get();
         let libros = cfg.profiles.iter().find(|p| p.id == "libros").unwrap();
         assert_eq!(libros.extra_flags, Vec::<String>::new());
-        assert_eq!(cfg.profiles_version, 5);
+        assert_eq!(cfg.profiles_version, 7);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -1866,7 +2035,7 @@ mod tests {
         let cfg = store.get();
         let libros = cfg.profiles.iter().find(|p| p.id == "libros").unwrap();
         assert_eq!(libros.extra_flags, Vec::<String>::new());
-        assert_eq!(cfg.profiles_version, 5);
+        assert_eq!(cfg.profiles_version, 7);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
